@@ -1,0 +1,14 @@
+{
+  "name": "netease-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "NeteaseCloudMusicApi 独立进程（由 start.bat / start.sh 启动）",
+  "scripts": {
+    "start": "node node_modules/NeteaseCloudMusicApi/app.js"
+  },
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "NeteaseCloudMusicApi": "^4.32.0"
+  }
+}

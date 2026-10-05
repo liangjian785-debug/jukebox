@@ -1,0 +1,14 @@
+{
+  "name": "jukebox-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "局域网点歌机主服务（Express + Socket.io + mpv）",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  }
+}

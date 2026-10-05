@@ -1,0 +1,29 @@
+# Node
+node_modules/
+dist/
+*.log
+npm-debug.log*
+
+# 环境与配置（含网易云 Cookie，勿提交）
+.env
+server/config.local.js
+
+# 运行状态持久化（含用户IP，勿提交）
+server/state.json
+server/presets.json
+server/schedules.json
+server/channel.json
+server/channels.json
+
+# 系统日志（本地存储）
+server/logs/
+
+# mpv 可执行文件（体积大，不入库）
+server/mpv.exe
+mpv.exe
+
+# 系统
+.DS_Store
+Thumbs.db
+
+server/config.local.js.bak
