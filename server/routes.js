@@ -15,6 +15,7 @@ const logger = require('./logger');
 const channels = require('./channels');
 const config = require('./config');
 const scheduler = require('./scheduler');
+const { playlistId } = require('./playlist-input');
 
 /** 渠道是否开启 + 名称 */
 function channelOn(platform) {
@@ -592,9 +593,17 @@ function createRouter(io, player, playNext, system) {
   });
 
   /** POST /api/admin/presets {playlistId} 添加预设歌单（自动获取歌单名） */
+  router.get('/admin/playlist-search', adminAuth, async (req, res) => {
+    const keyword = String(req.query.keyword || '').trim();
+    if (!keyword || keyword.length > 100) return res.status(400).json({ error: '请输入 1–100 个字符的歌单名称' });
+    try { res.json({ playlists: await netease.searchPlaylists(keyword) }); }
+    catch (e) { res.status(502).json({ error: '歌单搜索失败: ' + e.message }); }
+  });
+
   router.post('/admin/presets', adminAuth, async (req, res) => {
-    const id = Number(req.body && req.body.playlistId);
-    if (!id) return res.status(400).json({ error: 'playlistId 必填' });
+    let id;
+    try { id = await playlistId(req.body && req.body.playlistId); }
+    catch (e) { return res.status(400).json({ error: e.message }); }
     try {
       const pl = await netease.getPlaylistCached(id);
       const presets = loadPresets();

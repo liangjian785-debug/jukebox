@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import {
   adminLogin, adminStatus, adminPause, adminVolume, adminRemove, adminClear,
-  adminSetPlaylist, adminGetPlaylist, adminGetPresets, adminAddPreset, adminRemovePreset,
+  adminSetPlaylist, adminGetPlaylist, adminGetPresets, adminAddPreset, adminRemovePreset, adminSearchPlaylists,
   adminAudioDevices, adminSetAudioDevice,
   adminSetPlaySource, adminSkip, adminSetSkipConfig, adminSetBoostConfig, adminGetUsers, adminGetLogs, adminRestart, adminShutdown,
   adminSetChannels, adminSetCookie, adminGetCookieStatus, adminMoveQueue, adminPlayNow,
@@ -25,6 +25,9 @@ const queue = ref([]);
 const playlist = ref({ meta: { name: '', count: 0 }, songs: [] });
 const presets = ref([]);
 const newPlaylistId = ref('');
+const playlistResults = ref([]);
+const playlistBusy = ref(false);
+const playlistSearched = ref(false);
 const audioDevices = ref([]);
 const audioCurrent = ref('auto');
 const skipRequired = ref(8);
@@ -296,18 +299,35 @@ async function doSwitchPreset(id) {
   }
 }
 
-// 添加预设歌单（输入 ID，自动获取名字）
-async function doAddPreset() {
-  const id = Number(newPlaylistId.value);
-  if (!id) return showToast('请输入歌单 ID');
+// 按名称搜索，或直接添加分享链接/ID
+async function doFindPlaylist() {
+  const input = newPlaylistId.value.trim();
+  if (!input || playlistBusy.value) return;
+  playlistResults.value = [];
+  playlistSearched.value = false;
+  if (/^\d+$/.test(input) || /https?:\/\//i.test(input)) return doAddPreset(input);
+  playlistBusy.value = true;
+  try {
+    const result = await adminSearchPlaylists(input);
+    playlistResults.value = result.playlists || [];
+    playlistSearched.value = true;
+  } catch (e) { showToast(e.message); }
+  finally { playlistBusy.value = false; }
+}
+
+async function doAddPreset(id) {
+  if (playlistBusy.value) return;
+  playlistBusy.value = true;
   try {
     const r = await adminAddPreset(id);
     showToast(`已添加：${r.name}`);
     newPlaylistId.value = '';
+    playlistResults.value = [];
+    playlistSearched.value = false;
     refreshPresets();
   } catch (e) {
     showToast(e.message);
-  }
+  } finally { playlistBusy.value = false; }
 }
 
 // 删除预设歌单
@@ -950,17 +970,29 @@ onUnmounted(() => { socket?.close(); removeLoginListener?.(); });
               <div class="mb-3 flex gap-2">
                 <input
                   v-model="newPlaylistId"
-                  type="number"
+                  type="text"
                   class="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-white outline-none focus:border-indigo-500"
-                  placeholder="输入歌单 ID 添加"
+                  placeholder="输入歌单名称或粘贴分享链接"
+                  maxlength="1000"
+                  :disabled="playlistBusy"
+                  @keydown.enter="doFindPlaylist"
                 />
                 <button
                   class="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-500"
-                  @click="doAddPreset"
+                  :disabled="playlistBusy || !newPlaylistId.trim()"
+                  @click="doFindPlaylist"
                 >
-                  添加歌单
+                  {{ playlistBusy ? '处理中…' : '搜索 / 添加' }}
                 </button>
               </div>
+              <p class="mb-2 text-xs text-slate-500">按名称搜索后点击“添加”；也可粘贴网易云分享链接，无需查找 ID。</p>
+              <ul v-if="playlistResults.length" class="mb-3 max-h-56 shrink-0 divide-y divide-slate-700 overflow-y-auto">
+                <li v-for="result in playlistResults" :key="result.id" class="flex items-center gap-2 py-2">
+                  <div class="min-w-0 flex-1"><p class="truncate text-sm text-slate-200" :title="result.name">{{ result.name }}</p><p class="truncate text-xs text-slate-500">{{ result.creator }} · {{ result.count }} 首</p></div>
+                  <button class="shrink-0 rounded bg-indigo-600 px-2 py-1 text-xs text-white disabled:opacity-40" :disabled="playlistBusy || presets.some(p => p.id === result.id)" @click="doAddPreset(result.id)">{{ presets.some(p => p.id === result.id) ? '已添加' : '添加' }}</button>
+                </li>
+              </ul>
+              <p v-else-if="playlistSearched" class="mb-3 text-xs text-slate-500">没有找到歌单，可换个名称或粘贴分享链接。</p>
               <!-- 预设列表 -->
               <ul v-if="presets.length" class="min-h-0 flex-1 divide-y divide-slate-700/60 overflow-y-auto">
                 <li v-for="p in presets" :key="p.id" class="flex items-center gap-2 py-2">
@@ -982,7 +1014,7 @@ onUnmounted(() => { socket?.close(); removeLoginListener?.(); });
                   </button>
                 </li>
               </ul>
-              <p v-else class="py-4 text-center text-xs text-slate-600">暂无预设歌单，输入 ID 添加</p>
+              <p v-else class="py-4 text-center text-xs text-slate-600">暂无预设歌单，可搜索名称或粘贴分享链接添加</p>
             </div>
           </div>
         </div>

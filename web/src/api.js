@@ -98,6 +98,9 @@ export const adminSetPlaylist = (playlistId) =>
 export const adminGetPresets = () =>
   request('/api/admin/presets', { headers: { 'x-admin-key': adminKey() } });
 
+export const adminSearchPlaylists = keyword =>
+  request(`/api/admin/playlist-search?keyword=${encodeURIComponent(keyword)}`, { headers: { 'x-admin-key': adminKey() } });
+
 export const adminAddPreset = (playlistId) =>
   request('/api/admin/presets', { method: 'POST', body: JSON.stringify({ playlistId }), headers: { 'x-admin-key': adminKey() } });
 

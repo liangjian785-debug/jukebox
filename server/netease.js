@@ -126,10 +126,17 @@ async function getPlaylistCached(id) {
   return data;
 }
 
+/** 按名称搜索公开网易云歌单 */
+async function searchPlaylists(keyword) {
+  const json = await getJson(`/search?keywords=${encodeURIComponent(keyword)}&type=1000&limit=20`, { auth: false });
+  if (json.code !== 200) throw new Error('歌单搜索暂不可用，请稍后重试');
+  return (json.result?.playlists || []).map(item => ({ id: item.id, name: item.name, creator: item.creator?.nickname || '', count: item.trackCount || 0 }));
+}
+
 /** 心动FM（私人FM）：按用户口味推荐，每次返回少量歌曲 */
 async function getFmSongs() {
   const json = await getJson('/personal_fm');
   return (json.data || []).map(mapSearchSong);
 }
 
-module.exports = { search, getSongDetail, getSongUrl, getPlaylist, getPlaylistCached, getFmSongs };
+module.exports = { search, getSongDetail, getSongUrl, getPlaylist, getPlaylistCached, getFmSongs, searchPlaylists };

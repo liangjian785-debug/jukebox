@@ -8,7 +8,7 @@ const defaults = {
   neteaseApiBase: 'http://127.0.0.1:4000', // NeteaseCloudMusicApi 独立进程地址（让出3000）
   qqApiBase: 'http://127.0.0.1:3400',   // QQMusicApi 独立进程地址（需先部署QQMusicApi）
   neteaseCookie: '',                   // 个人网易云账号 Cookie（可选，建议 VIP）
-  playlistId: 0,                       // 默认网易云歌单 ID（0 = 未配置，仅插播）
+  playlistId: 3778678,                 // 默认网易云热歌榜
   maxUserQueue: 300,                   // 插播区上限
   maxPerUser: 10,                      // 每人在插播区最多点几首
   searchCacheMs: 30000,                // 搜索缓存时长
@@ -32,4 +32,4 @@ try {
   // 无本地配置，使用默认值
 }
 
-module.exports = { ...defaults, ...local, ...(process.env.JUKEBOX_MAIN_PORT ? { port: Number(process.env.JUKEBOX_MAIN_PORT) } : {}), ...(process.env.JUKEBOX_QQ_PORT ? { qqApiBase: 'http://127.0.0.1:' + process.env.JUKEBOX_QQ_PORT } : {}), ...(process.env.JUKEBOX_NETEASE_PORT ? { neteaseApiBase: 'http://127.0.0.1:' + process.env.JUKEBOX_NETEASE_PORT } : {}), ...(process.env.JUKEBOX_MPV_PATH ? { mpvPath: process.env.JUKEBOX_MPV_PATH } : {}) };
+module.exports = { ...defaults, ...local, playlistId: local.playlistId || defaults.playlistId, ...(process.env.JUKEBOX_MAIN_PORT ? { port: Number(process.env.JUKEBOX_MAIN_PORT) } : {}), ...(process.env.JUKEBOX_QQ_PORT ? { qqApiBase: 'http://127.0.0.1:' + process.env.JUKEBOX_QQ_PORT } : {}), ...(process.env.JUKEBOX_NETEASE_PORT ? { neteaseApiBase: 'http://127.0.0.1:' + process.env.JUKEBOX_NETEASE_PORT } : {}), ...(process.env.JUKEBOX_MPV_PATH ? { mpvPath: process.env.JUKEBOX_MPV_PATH } : {}) };

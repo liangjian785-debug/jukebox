@@ -13,9 +13,9 @@ module.exports = {
   // 登录 music.163.com → F12 → Network → 任意请求 → Request Headers → 复制 Cookie 整行
   neteaseCookie: '',
 
-  // 默认网易云歌单 ID（0 = 不配置，仅插播模式）
+  // 默认网易云热歌榜；旧配置为 0 时也使用热歌榜
   // 歌单页 URL 中 id 后的数字，如 https://music.163.com/#/playlist?id=123456789 → 123456789
-  playlistId: 0,
+  playlistId: 3778678,
 
   // 插播区上限
   maxUserQueue: 300,

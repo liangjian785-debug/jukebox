@@ -144,13 +144,13 @@ Copy-Item -LiteralPath './server/config.local.example.js' -Destination './server
 ```javascript
 adminKey: '请替换为自己的管理口令',
 mpvPath: 'D:/tools/mpv/mpv.exe',
-playlistId: 0,
+playlistId: 3778678,
 autoStart: false,
 ```
 
 - `adminKey`：管理员登录口令，必须自行设置；留空会禁用管理功能。
 - `mpvPath`：填写真实的 mpv 程序位置。已加入 PATH 时可保留 `'mpv'`。Windows 路径建议使用 `/`。
-- `playlistId`：默认网易云歌单 ID；`0` 表示不配置背景歌单。
+- `playlistId`：默认网易云歌单 ID；未配置或设为 `0` 时使用热歌榜（3778678），已有自选歌单保留。
 - `autoStart`：默认 `false`，启动后等待管理员点击“开始播放”。
 
 配置格式为 JavaScript，字符串保留引号，字段之间保留逗号。使用 UTF-8 保存。修改本地配置后重启主服务生效。
@@ -260,9 +260,9 @@ autoStart: false,
 - **默认歌单**：使用网易云歌单，随机播放一轮后重新打乱顺序。
 - **心动 FM**：使用网易云账号的私人推荐，需要可用的网易云登录状态。
 
-在歌单管理区域输入网易云歌单 ID，添加预设歌单后可通过快捷按钮切换。歌单链接中 `id=123456789` 对应 ID `123456789`。
+在歌单管理区域输入歌单名称，搜索后点击“添加”；也可直接粘贴网易云歌单分享链接（支持短链接）或输入歌单 ID。添加预设歌单后可通过快捷按钮切换。
 
-未配置歌单、也没有用户点歌时，等待点歌是正常状态。
+未配置歌单时默认使用热歌榜。程序启动仍保持暂停；点击开始播放后，用户队列为空时播放所选背景播放源。歌单加载失败时等待点歌。
 
 ### 用户、日志与渠道
 
@@ -404,7 +404,7 @@ Get-Content -LiteralPath './server/logs/netease-api.log' -Encoding utf8 -Tail 50
 | `mpvPath` | `mpv` | 播放器路径或 PATH 中的命令名 |
 | `volume` | `100` | 初始音量，0–100 |
 | `audioDevice` | 空字符串 | 初始输出设备，空值使用系统默认 |
-| `playlistId` | `0` | 默认网易云歌单 ID，0 表示未配置 |
+| `playlistId` | `3778678` | 默认网易云热歌榜，未配置或 0 时使用此榜 |
 | `presetPlaylists` | 热歌榜 | 管理台预设歌单 |
 | `fmMode` | `false` | 初始使用心动 FM 与否，保存的运行状态可能覆盖此值 |
 | `autoStart` | `false` | 启动后是否立即播放 |
