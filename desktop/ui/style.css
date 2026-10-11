@@ -2,3 +2,5 @@
 .app-nav{height:64px;position:fixed;top:0;left:0;right:0;display:flex;align-items:center;gap:12px;padding:0 20px;background:#14251f;border-bottom:1px solid #304b40;z-index:1}.app-nav strong{margin-right:auto}.app-nav button{background:transparent;color:#a3b8b0;padding:9px 14px}.app-nav button.selected{background:#304c40;color:#8be6be}body{padding-top:64px}.business main{display:none}
 .title-bar{position:fixed;top:0;left:0;right:0;height:40px;display:flex;align-items:center;gap:10px;padding:0 160px 0 16px;background:#14251f;color:#e8f1ee;font-size:13px;app-region:drag;-webkit-app-region:drag;user-select:none;z-index:2}.title-bar img{width:20px;height:20px}.app-nav{top:40px;justify-content:flex-start}.app-nav button{app-region:no-drag;-webkit-app-region:no-drag}body{padding-top:104px}
 .app-nav #quit{margin-left:auto;color:#ffb3a5}#password-result{overflow-wrap:anywhere}
+.app-nav #login-message{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}.app-nav button{flex-shrink:0}
+#update-notes{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6}

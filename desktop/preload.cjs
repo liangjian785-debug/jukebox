@@ -3,6 +3,10 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('desktop', {
   state: () => ipcRenderer.invoke('desktop:state'),
   quit: () => ipcRenderer.invoke('desktop:quit'),
+  updateCheck: () => ipcRenderer.invoke('desktop:update-check'),
+  updateDownload: () => ipcRenderer.invoke('desktop:update-download'),
+  updateRelease: () => ipcRenderer.invoke('desktop:update-release'),
+  loginCheck: () => ipcRenderer.invoke('desktop:login-check'),
   password: (oldKey, newKey) => ipcRenderer.invoke('desktop:password', oldKey, newKey),
   port: port => ipcRenderer.invoke('desktop:port', port),
   setup: key => ipcRenderer.invoke('desktop:setup', key),

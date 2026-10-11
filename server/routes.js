@@ -283,12 +283,14 @@ function createRouter(io, player, playNext, system) {
     if (!cookie) return res.status(400).json({ error: 'cookie 不能为空' });
     if (platform === 'netease') {
       // 写 config.local.js + 更新内存
-      config.neteaseCookie = cookie;
       const cfgPath = require('./paths').configPath;
       try {
         let content = fs.readFileSync(cfgPath, 'utf8');
-        content = content.replace(/(neteaseCookie:\s*')[^']*(')/, `$1${cookie}$2`);
+        const field = /\bneteaseCookie\s*:\s*(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')/;
+        if (!field.test(content)) throw new Error('未找到网易云 Cookie 配置字段');
+        content = content.replace(field, () => 'neteaseCookie: ' + JSON.stringify(cookie));
         fs.writeFileSync(cfgPath, content);
+        config.neteaseCookie = cookie;
       } catch (e) {
         return res.status(500).json({ error: '配置写入失败: ' + e.message });
       }

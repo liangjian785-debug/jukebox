@@ -8,10 +8,44 @@ const { spawn, execFile } = require('child_process');
 const net = require('net');
 const os = require('os');
 const path = require('path');
+const fs = require('fs');
 const config = require('./config');
 
 const instance = (process.env.JUKEBOX_INSTANCE_ID || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80);
 const ipcSuffix = instance ? '-' + instance : '';
+const fadeScript = path.join(os.tmpdir(), 'jukebox-fade' + ipcSuffix + '.lua');
+const fadeSource = `local target = tonumber(mp.get_opt('jukebox-volume')) or 80
+local stopping = nil
+local transition = nil
+local gain = 1
+mp.register_script_message('jukebox-pause', function(value)
+  local pausing = value == 'true'
+  transition = { start = mp.get_time(), from = gain, to = pausing and 0 or 1 }
+  if not pausing then
+    mp.set_property_number('volume', target * gain)
+    mp.set_property_bool('pause', false)
+  end
+end)
+mp.register_script_message('jukebox-volume', function(value) target = tonumber(value) or target end)
+mp.register_script_message('jukebox-fade-out', function() stopping = mp.get_time() end)
+mp.add_periodic_timer(0.04, function()
+  if transition then
+    local elapsed = math.min(1, mp.get_time() - transition.start)
+    gain = transition.from + (transition.to - transition.from) * elapsed
+    if elapsed >= 1 then
+      if transition.to == 0 then mp.set_property_bool('pause', true) end
+      transition = nil
+    end
+  end
+  local position = mp.get_property_number('time-pos')
+  if not position then return end
+  local factor = math.min(1, math.max(0, position))
+  local duration = mp.get_property_number('duration')
+  if duration then factor = math.min(factor, math.max(0, duration - position)) end
+  if stopping then factor = math.min(factor, math.max(0, 1 - (mp.get_time() - stopping))) end
+  mp.set_property_number('volume', target * factor * gain)
+end)
+`;
 const IPC_NAME =
   process.platform === 'win32' ? '\\\\.\\pipe\\jukebox-mpv' + ipcSuffix : path.join(os.tmpdir(), 'jukebox-mpv' + ipcSuffix + '.sock');
 
@@ -40,19 +74,21 @@ class Player {
   }
 
   /** 播放一个 URL（自动停掉上一个） */
-  play(url) {
+  async play(url) {
     if (this.stopping) return;
     const generation = ++this._generation;
-    this.stop();
+    await this.stop();
+    if (generation !== this._generation || this.stopping) return;
     this._ended = false;
     this.paused = false;
     this.manualPaused = false;
     this._ipcRetries = 0;
     let proc;
-    const args = ['--volume=' + this.volume, '--no-terminal', `--input-ipc-server=${IPC_NAME}`];
+    const args = ['--volume=0', '--no-terminal', `--input-ipc-server=${IPC_NAME}`, `--script=${fadeScript}`, `--script-opts=jukebox-volume=${this.volume}`];
     if (config.audioDevice) args.push(`--audio-device=${config.audioDevice}`);
     args.push(url);
     try {
+      fs.writeFileSync(fadeScript, fadeSource, 'utf8');
       proc = spawn(config.mpvPath, args, { stdio: 'ignore', windowsHide: true });
     } catch (e) {
       this._ended = true;
@@ -92,7 +128,8 @@ class Player {
       if (this.proc !== proc) return conn.destroy();
       this.ipc = conn;
       this._ipcRetries = 0;
-      if (this.manualPaused) this._send(['set_property', 'pause', true]);
+      this._send(['script-message', 'jukebox-volume', String(this.volume)]);
+      if (this.manualPaused) this._send(['script-message', 'jukebox-pause', 'true']);
     });
     conn.on('error', () => {
       conn.destroy();
@@ -167,7 +204,7 @@ class Player {
   setPaused(paused) {
     this.paused = paused;
     this.manualPaused = paused;
-    if (this._send(['set_property', 'pause', paused])) return true;
+    if (this._send(['script-message', 'jukebox-pause', String(paused)])) return true;
     return false;
   }
 
@@ -175,7 +212,7 @@ class Player {
   resume() {
     this.paused = false;
     this.manualPaused = false;
-    this._send(['set_property', 'pause', false]);
+    this._send(['script-message', 'jukebox-pause', 'false']);
   }
 
   /** 查询 mpv 实际暂停状态（用于意外暂停检测） */
@@ -218,7 +255,7 @@ class Player {
   /** 设置音量 0-100 */
   setVolume(v) {
     this.volume = Math.max(0, Math.min(100, Number(v) || 0));
-    this._send(['set_property', 'volume', this.volume]);
+    this._send(['script-message', 'jukebox-volume', String(this.volume)]);
   }
 
   /** 运行时切换音频输出设备（IPC，立即生效）；同时更新内存配置 */
@@ -231,15 +268,21 @@ class Player {
 
   /** 停止（kill 进程；exit 事件触发 onEnd → 播下一首） */
   stop() {
-    if (this.proc) {
-      this._closeIpc();
-      try {
-        this.proc.kill();
-      } catch (e) {
-        /* ignore */
-      }
-      this.proc = null;
-    }
+    const proc = this.proc;
+    if (!proc) return Promise.resolve();
+    if (this.stopPromise) return this.stopPromise;
+    const fading = this._send(['script-message', 'jukebox-fade-out']);
+    this.stopPromise = new Promise(resolve => {
+      const timer = setTimeout(() => { try { proc.kill(); } catch (_) { finish(); } }, fading ? 1000 : 0);
+      const finish = () => {
+        clearTimeout(timer);
+        if (this.proc === proc) { this.proc = null; this._closeIpc(); }
+        this.stopPromise = null;
+        resolve();
+      };
+      proc.once('close', finish);
+    });
+    return this.stopPromise;
   }
 
   enumerateDevices(callback) {

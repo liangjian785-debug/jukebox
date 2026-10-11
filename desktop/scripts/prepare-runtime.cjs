@@ -22,7 +22,7 @@ function copy(source, destination, relative, managed = true) {
   } else {
     if (managed && !tracked.has(relative)) {
       // New lifecycle modules are allowed before their first commit, but only at explicit roots.
-      if (!['server/paths.js', 'QQMusicApi/paths.js', 'QQMusicApi/package-lock.json'].includes(relative)) throw new Error('Unmanaged runtime input: ' + relative);
+        if (!['server/paths.js', 'QQMusicApi/paths.js', 'QQMusicApi/package-lock.json', 'QQMusicApi/util/cookieRenewal.js'].includes(relative)) throw new Error('Unmanaged runtime input: ' + relative);
     }
     fs.mkdirSync(path.dirname(destination), { recursive: true });
     fs.copyFileSync(source, destination);

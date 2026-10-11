@@ -34,6 +34,9 @@ const logs = ref([]);
 const cookieStatus = ref(null);
 const neteaseCookieInput = ref('');
 const qqCookieInput = ref('');
+const desktopLogin = !!window.musicLogin;
+const platformLoginMessage = ref('');
+let removeLoginListener;
 const adminSearchPlatform = ref('netease');
 const adminSearchKeyword = ref('');
 const adminSearchResults = ref([]);
@@ -221,6 +224,12 @@ async function refreshCookieStatus() {
   } catch (e) {
     /* 忽略 */
   }
+}
+
+async function doPlatformLogin(platform) {
+  try {
+    await window.musicLogin.open(platform, sessionStorage.getItem('jukebox_admin_key') || '');
+  } catch (e) { showToast(e.message); }
 }
 
 // 保存平台 Cookie（管理端直接填写）
@@ -501,6 +510,10 @@ async function doSwitchPlaylist() {
 const playing = computed(() => status.value?.current);
 
 onMounted(() => {
+  removeLoginListener = window.musicLogin?.onResult(message => {
+    platformLoginMessage.value = message;
+    refreshCookieStatus();
+  });
   if (sessionStorage.getItem('jukebox_admin_key')) authed.value = true;
   socket = connectSocket(() => refreshAll());
   if (authed.value) {
@@ -513,7 +526,7 @@ onMounted(() => {
   }
 });
 
-onUnmounted(() => socket && socket.close());
+onUnmounted(() => { socket?.close(); removeLoginListener?.(); });
 </script>
 
 <template>
@@ -1022,6 +1035,8 @@ onUnmounted(() => socket && socket.close());
                   </button>
                 </div>
               </div>
+              <button v-if="desktopLogin" class="rounded-lg bg-indigo-600 px-3 py-2 text-sm text-white hover:bg-indigo-500" @click="doPlatformLogin('netease')">登录网易云</button>
+              <template v-else>
               <textarea
                 v-model="neteaseCookieInput"
                 rows="3"
@@ -1031,6 +1046,7 @@ onUnmounted(() => socket && socket.close());
               <button class="mt-2 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs text-white hover:bg-indigo-500" @click="doSaveCookie('netease')">
                 保存网易云 Cookie
               </button>
+              </template>
             </div>
             <!-- QQ音乐 -->
             <div class="rounded-lg border border-slate-700/50 bg-slate-900/40 p-3">
@@ -1049,6 +1065,8 @@ onUnmounted(() => socket && socket.close());
                   </button>
                 </div>
               </div>
+              <button v-if="desktopLogin" class="rounded-lg bg-indigo-600 px-3 py-2 text-sm text-white hover:bg-indigo-500" @click="doPlatformLogin('qq')">登录QQ音乐</button>
+              <template v-else>
               <textarea
                 v-model="qqCookieInput"
                 rows="3"
@@ -1058,8 +1076,11 @@ onUnmounted(() => socket && socket.close());
               <button class="mt-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-500" @click="doSaveCookie('qq')">
                 保存 QQ Cookie
               </button>
+              </template>
             </div>
           </div>
+          <p v-if="platformLoginMessage" class="mt-3 text-sm text-emerald-300" role="status">{{ platformLoginMessage }}</p>
+          <p v-if="desktopLogin" class="mt-2 text-xs text-slate-400">在程序内的官方页面登录，验证成功后自动保存并返回管理台。</p>
           <p class="mt-2 text-xs text-slate-600">
             渠道关闭后，用户端该平台搜索/点歌/榜单会提示"维护中"。Cookie 仅在管理台与本地保存。
           </p>

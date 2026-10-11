@@ -1,16 +1,21 @@
 'use strict';
-const { app, BrowserWindow, WebContentsView, Tray, Menu, ipcMain, shell, utilityProcess, nativeImage, dialog } = require('electron');
+const { app, BrowserWindow, WebContentsView, session, Tray, Menu, ipcMain, shell, utilityProcess, nativeImage, dialog } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
 const os = require('os');
 const { Services, validateMainPort } = require('./services.cjs');
 const { changedConfig } = require('./admin-key.cjs');
+const { NeteaseLogin, verifyQQLogin } = require('./netease-login.cjs');
+const vm = require('vm');
 app.setName('JukeboxDesktop');
+app.commandLine.appendSwitch('lang', 'zh-CN');
 app.setPath('userData', path.join(app.getPath('appData'), 'JukeboxDesktop'));
 const stateFile = path.join(__dirname, 'ui', 'index.html');
 const stateURL = pathToFileURL(stateFile).href;
 let statusWindow, musicView, tray, manager, activePage = 'home', exiting = false, allowExit = false, closeNotice = false;
+let loginView, loginCapture, loginMessage = '点击登录后，在网易云官方页面完成登录。';
+let updates;
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on('second-instance', () => showStatus());
@@ -23,17 +28,21 @@ function controlled(window, allowed) {
   window.on('close', event => { if (!exiting) { event.preventDefault(); window.hide(); if (!closeNotice) { closeNotice = true; tray.displayBalloon({ title: '局域网点歌机', content: '服务继续在后台运行；请从托盘菜单退出。' }); } } });
 }
 function addresses() {
-  return Object.values(os.networkInterfaces()).flat().filter(item => item && item.family === 'IPv4' && !item.internal).map(item => 'http://' + item.address + ':' + manager.ports.main);
+  const lan = Object.entries(os.networkInterfaces())
+    .filter(([name]) => !/vethernet|vmware|virtualbox|vpn|tun|tap|loopback/i.test(name))
+    .flatMap(([, items]) => items || [])
+    .find(item => item.family === 'IPv4' && !item.internal && /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(item.address));
+  return lan ? ['http://' + lan.address + ':' + manager.ports.main] : [];
 }
-function snapshot() { return { ...manager.snapshot(), page: activePage, needsSetup: !fs.existsSync(path.join(manager.dataDir, 'server', 'config.local.js')), addresses: addresses() }; }
+function snapshot() { return { ...manager.snapshot(), page: activePage, loginMessage, update: updates?.snapshot() || { version: app.getVersion?.() || '开发版', status: 'idle', message: '在线更新仅在安装版中可用。' }, needsSetup: !fs.existsSync(path.join(manager.dataDir, 'server', 'config.local.js')), addresses: addresses() }; }
 function broadcast() {
-  if (manager.state !== 'running') { activePage = 'home'; musicView?.setVisible(false); }
+  if (manager.state !== 'running') { activePage = 'home'; musicView?.setVisible(false); loginView?.setVisible(false); loginCapture?.stop(); }
   statusWindow?.webContents.send('desktop:state', snapshot());
 }
 function resizeMusicView() {
-  if (!musicView) return;
+  if (!musicView && !loginView) return;
   const [width, height] = statusWindow.getContentSize();
-  musicView.setBounds({ x: 0, y: 104, width, height: Math.max(0, height - 104) });
+  for (const view of [musicView, loginView]) view?.setBounds({ x: 0, y: 104, width, height: Math.max(0, height - 104) });
 }
 function authorized(event) { return event.sender === statusWindow?.webContents && event.senderFrame === statusWindow.webContents.mainFrame && event.senderFrame.url === stateURL; }
 function handler(name, operation) { ipcMain.handle('desktop:' + name, async (event, ...args) => { if (!authorized(event)) throw new Error('未经授权的页面'); return operation(...args); }); }
@@ -62,6 +71,55 @@ async function initialize() {
   statusWindow.loadFile(stateFile);
   handler('state', snapshot);
   handler('quit', quit);
+  handler('login-check', () => loginCapture?.capture());
+  ipcMain.handle('music:login', async (event, platform, key) => {
+    if (event.sender !== musicView?.webContents || event.senderFrame !== musicView.webContents.mainFrame || event.senderFrame.url !== 'http://127.0.0.1:' + manager.ports.main + '/admin.html') throw new Error('请从管理台登录');
+    if (!['netease', 'qq'].includes(platform)) throw new Error('不支持的平台');
+    const configModule = { exports: {} }; vm.runInNewContext(fs.readFileSync(path.join(dataDir, 'server', 'config.local.js'), 'utf8'), { module: configModule }, { timeout: 100 });
+    if (!key || key !== configModule.exports.adminKey) throw new Error('管理口令无效，请重新登录管理台');
+    if (manager.state !== 'running') throw new Error('请先启动主服务');
+    loginCapture?.stop();
+    loginView?.webContents.close();
+    if (loginView) statusWindow.contentView.removeChildView(loginView);
+    {
+      const name = platform === 'qq' ? 'QQ音乐' : '网易云';
+      const loginSession = session.fromPartition('persist:' + platform + '-login');
+      loginView = new WebContentsView({ webPreferences: { session: loginSession, sandbox: true, contextIsolation: true, nodeIntegration: false } });
+      const allowed = url => { try { const target = new URL(url); const domain = platform === 'qq' ? 'qq.com' : '163.com'; return target.protocol === 'https:' && (target.hostname === domain || target.hostname.endsWith('.' + domain)); } catch { return false; } };
+      loginView.webContents.on('will-navigate', (event, url) => { if (!allowed(url)) event.preventDefault(); });
+      loginView.webContents.on('will-redirect', (event, url) => { if (!allowed(url)) event.preventDefault(); });
+      loginView.webContents.setWindowOpenHandler(({ url }) => { if (allowed(url)) loginView.webContents.loadURL(url).catch(() => {}); return { action: 'deny' }; });
+      statusWindow.contentView.addChildView(loginView);
+      const capture = new NeteaseLogin({ session: loginSession, platform,
+        verify: async cookie => {
+          if (platform === 'qq') return verifyQQLogin(cookie);
+          const response = await fetch('http://127.0.0.1:' + manager.ports[platform] + (platform === 'qq' ? '/user/refresh' : '/login/status'), { headers: { Cookie: cookie }, signal: AbortSignal.timeout(8000) });
+          if (!response.ok) throw new Error('验证失败');
+          const result = await response.json();
+          return !!result.data?.profile?.userId;
+        },
+        save: cookie => manager.enqueue(async () => {
+          if (manager.state !== 'running' || !capture.active) throw new Error('服务已停止');
+          const module = { exports: {} }; vm.runInNewContext(fs.readFileSync(path.join(dataDir, 'server', 'config.local.js'), 'utf8'), { module }, { timeout: 100 });
+          if (module.exports.adminKey !== key) throw new Error('管理口令已修改');
+          const response = await fetch('http://127.0.0.1:' + manager.ports.main + '/api/admin/cookie', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-key': key }, body: JSON.stringify({ platform, cookie }), signal: AbortSignal.timeout(8000) });
+          if (!response.ok) throw new Error('保存失败');
+        }),
+        report: (message, complete) => {
+          loginMessage = name + '：' + message;
+          if (complete) { activePage = 'admin'; loginView.setVisible(false); musicView.setVisible(true); }
+          musicView.webContents.send('music:login-result', loginMessage); broadcast();
+        }
+      });
+      loginCapture = capture;
+    }
+    musicView?.setVisible(false); loginMessage = '请在官方页面完成登录，完成后会自动验证并保存。';
+    activePage = platform + '-login'; resizeMusicView(); loginView.setVisible(true); broadcast();
+    loginCapture.start();
+    try { await loginView.webContents.loadURL(platform === 'qq' ? 'https://y.qq.com/' : 'https://music.163.com/'); }
+    catch { if (activePage === platform + '-login') { loginMessage = '官方页面加载失败，请检查网络后重新打开。'; activePage = 'admin'; loginView.setVisible(false); musicView.setVisible(true); loginCapture.stop(); musicView.webContents.send('music:login-result', loginMessage); broadcast(); } }
+    return snapshot();
+  });
   handler('password', (oldKey, newKey) => manager.enqueue(async () => {
     const configPath = path.join(dataDir, 'server', 'config.local.js');
     const config = changedConfig(fs.readFileSync(configPath, 'utf8'), oldKey, newKey);
@@ -91,13 +149,19 @@ async function initialize() {
     await run(() => manager.start()); return snapshot();
   });
   handler('restart', () => run(() => manager.restart()));
+  handler('update-check', () => updates?.check());
+  handler('update-download', () => updates?.download());
+  handler('update-release', () => shell.openExternal('https://github.com/liangjian785-debug/jukebox/releases/latest'));
   handler('resume', () => run(() => manager.resumeMain()));
   handler('open', async page => {
+    const returningToAdmin = page === 'admin' && activePage.endsWith('-login');
+    loginCapture?.stop(); loginView?.setVisible(false);
+    if (returningToAdmin && manager.state === 'running') { activePage = 'admin'; musicView.setVisible(true); broadcast(); return snapshot(); }
     if (page === 'home') { activePage = 'home'; musicView?.setVisible(false); broadcast(); return snapshot(); }
     if (manager.state !== 'running' || !['song', 'admin'].includes(page)) throw new Error('服务尚未就绪');
     const base = 'http://127.0.0.1:' + manager.ports.main;
     if (!musicView) {
-      musicView = new WebContentsView({ webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false } });
+      musicView = new WebContentsView({ webPreferences: { preload: path.join(__dirname, 'music-preload.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false } });
       musicView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
       musicView.webContents.on('will-navigate', (event, url) => { if (new URL(url).origin !== 'http://127.0.0.1:' + manager.ports.main) event.preventDefault(); });
       statusWindow.contentView.addChildView(musicView);
@@ -108,9 +172,13 @@ async function initialize() {
     if (manager.state !== 'running') return snapshot();
     activePage = page; resizeMusicView(); musicView.setVisible(true); broadcast(); return snapshot();
   });
-  handler('copy', () => { require('electron').clipboard.writeText(addresses()[0] || 'http://127.0.0.1:' + manager.ports.main); });
+  handler('copy', () => { const address = addresses()[0]; if (!address) throw new Error('未发现局域网地址，请连接网络。'); require('electron').clipboard.writeText(address); });
   handler('folder', kind => { if (!['data', 'logs'].includes(kind)) throw new Error('非法目录'); return shell.openPath(kind === 'data' ? dataDir : path.join(dataDir, 'logs')); });
   if (!snapshot().needsSetup) await run(() => manager.start());
+  if (app.isPackaged) {
+    updates = require('./updates.cjs').createUpdates(require('electron-updater').autoUpdater, app.getVersion(), broadcast);
+    updates.check();
+  }
 }
 async function run(operation) {
   try {
@@ -122,7 +190,7 @@ async function run(operation) {
 async function quit() {
   if (exiting) return;
   exiting = true;
-  try { await manager?.stop(); musicView?.webContents.close(); tray?.destroy(); allowExit = true; app.quit(); }
+  try { loginCapture?.stop(); await manager?.stop(); musicView?.webContents.close(); loginView?.webContents.close(); tray?.destroy(); allowExit = true; app.quit(); }
   catch (error) { exiting = false; manager.error = error.message; manager.changed('failed'); showStatus(); }
 }
 app.on('before-quit', event => { if (!allowExit) { event.preventDefault(); quit(); } });

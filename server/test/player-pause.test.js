@@ -23,7 +23,7 @@ test('a pause clicked before mpv IPC connects is sent when it connects', () => {
 
     assert.equal(player.setPaused(true), false);
     conn.emit('connect');
-    assert.deepEqual(sent, [['set_property', 'pause', true]]);
+    assert.deepEqual(sent.filter(command => command[1] === 'jukebox-pause'), [['script-message', 'jukebox-pause', 'true']]);
     assert.equal(player.paused, true);
   } finally {
     player.ipc = null;

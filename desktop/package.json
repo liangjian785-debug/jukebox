@@ -1,6 +1,6 @@
 {
   "name": "jukebox-desktop",
-  "version": "1.0.0",
+  "version": "1.0.11",
   "private": true,
   "description": "局域网点歌机 Windows 桌面应用",
   "main": "main.cjs",
@@ -18,6 +18,9 @@
     "appId": "io.github.liangjian785debug.jukebox",
     "productName": "JukeboxDesktop",
     "asar": true,
+    "electronLanguages": [
+      "zh-CN"
+    ],
     "directories": {
       "output": "release",
       "buildResources": "assets"
@@ -31,7 +34,10 @@
       "assets/icon.png",
       "assets/icon.ico",
       "package.json",
-      "admin-key.cjs"
+      "admin-key.cjs",
+      "netease-login.cjs",
+      "music-preload.cjs",
+      "updates.cjs"
     ],
     "extraResources": [
       {
@@ -68,10 +74,20 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "include": "assets/installer.nsh"
-    }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "repo": "jukebox",
+        "owner": "liangjian785-debug"
+      }
+    ]
   },
   "engines": {
     "node": ">=22.12.0"
   },
-  "author": "liangjian785-debug"
+  "author": "liangjian785-debug",
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  }
 }

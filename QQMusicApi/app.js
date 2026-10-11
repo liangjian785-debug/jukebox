@@ -17,11 +17,15 @@ const dataHandle = new DataStatistics();
 const feedback = new Feedback();
 const cache = new Cache();
 const globalCookie = GlobalCookie(require('./paths').dataDir);
+const cookieRenewal = require('./util/cookieRenewal')({
+  globalCookie,
+  url: () => 'http://127.0.0.1:' + global.PORT + '/user/refresh'
+});
 
 
 // 每10分钟存一下数据
 const statisticsTimer = config.useDataStatistics ? setInterval(() => dataHandle.saveInfo(), 60000 * 10) : null;
-app.locals.shutdown = () => { clearInterval(statisticsTimer); };
+app.locals.shutdown = () => { clearInterval(statisticsTimer); cookieRenewal.stop(); };
 
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
