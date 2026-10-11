@@ -31,7 +31,7 @@ function cleanIp(ip) {
 }
 
 // ===== 预设歌单持久化（presets.json，不入 git） =====
-const PRESETS_FILE = path.join(__dirname, 'presets.json');
+const PRESETS_FILE = require('./paths').presetsPath;
 function loadPresets() {
   try {
     const arr = JSON.parse(fs.readFileSync(PRESETS_FILE, 'utf8'));
@@ -284,7 +284,7 @@ function createRouter(io, player, playNext, system) {
     if (platform === 'netease') {
       // 写 config.local.js + 更新内存
       config.neteaseCookie = cookie;
-      const cfgPath = path.join(__dirname, 'config.local.js');
+      const cfgPath = require('./paths').configPath;
       try {
         let content = fs.readFileSync(cfgPath, 'utf8');
         content = content.replace(/(neteaseCookie:\s*')[^']*(')/, `$1${cookie}$2`);
@@ -333,7 +333,7 @@ function createRouter(io, player, playNext, system) {
       }
     }
     // QQ cookie 文件存在性
-    const qqCookieFile = path.join(__dirname, '..', 'QQMusicApi', 'data', 'cookie.json');
+    const qqCookieFile = path.join(require('./paths').qqDir, 'cookie.json');
     const qqConfigured = fs.existsSync(qqCookieFile);
     res.json({
       channels: state.channels,
@@ -445,7 +445,7 @@ function createRouter(io, player, playNext, system) {
     player.setVolume(v);
     config.volume = v; // 同步内存配置
     // 持久化到 config.local.js（保留其他配置）
-    const cfgPath = path.join(__dirname, 'config.local.js');
+    const cfgPath = require('./paths').configPath;
     try {
       if (fs.existsSync(cfgPath)) {
         let content = fs.readFileSync(cfgPath, 'utf8');
@@ -475,7 +475,7 @@ function createRouter(io, player, playNext, system) {
     if (Number.isNaN(n) || n < 1 || n > 100) return res.status(400).json({ error: 'required 需为 1-100' });
     state.setSkipRequired(n);
     config.skipRequired = n;
-    const cfgPath = path.join(__dirname, 'config.local.js');
+    const cfgPath = require('./paths').configPath;
     try {
       if (fs.existsSync(cfgPath)) {
         let content = fs.readFileSync(cfgPath, 'utf8');
@@ -494,7 +494,7 @@ function createRouter(io, player, playNext, system) {
     const n = Number(req.body && req.body.required);
     if (Number.isNaN(n) || n < 1 || n > 100) return res.status(400).json({ error: 'required 需为 1-100' });
     config.boostRequired = n;
-    const cfgPath = path.join(__dirname, 'config.local.js');
+    const cfgPath = require('./paths').configPath;
     try {
       if (fs.existsSync(cfgPath)) {
         let content = fs.readFileSync(cfgPath, 'utf8');
@@ -566,7 +566,7 @@ function createRouter(io, player, playNext, system) {
       state.setPlaylist(pl.id, pl.name, pl.songs);
       config.playlistId = id; // 同步内存，重启后仍用此歌单
       // 持久化到 config.local.js
-      const cfgPath = path.join(__dirname, 'config.local.js');
+      const cfgPath = require('./paths').configPath;
       try {
         if (fs.existsSync(cfgPath)) {
           let content = fs.readFileSync(cfgPath, 'utf8');
@@ -625,7 +625,7 @@ function createRouter(io, player, playNext, system) {
 
   /** GET /api/admin/audio-devices 查询 mpv 可用音频设备 */
   router.get('/admin/audio-devices', adminAuth, (req, res) => {
-    execFile(config.mpvPath, ['--audio-device=help'], { windowsHide: true }, (err, stdout, stderr) => {
+    player.enumerateDevices( (err, stdout, stderr) => {
       const out = (stderr || stdout || '').toString();
       const devices = [];
       const re = /^\s*'([^']+)'\s*\(([^)]*)\)/gm;
@@ -642,7 +642,7 @@ function createRouter(io, player, playNext, system) {
     const device = (req.body && req.body.device) || '';
     player.setAudioDevice(device === 'auto' ? '' : device);
     // 持久化到 config.local.js（保留其他配置）
-    const cfgPath = path.join(__dirname, 'config.local.js');
+    const cfgPath = require('./paths').configPath;
     try {
       if (fs.existsSync(cfgPath)) {
         let content = fs.readFileSync(cfgPath, 'utf8');
@@ -691,7 +691,7 @@ function createRouter(io, player, playNext, system) {
     const mode = (req.body && req.body.mode) === 'fm' ? 'fm' : 'playlist';
     state.setPlaySource(mode);
     config.fmMode = mode === 'fm';
-    const cfgPath = path.join(__dirname, 'config.local.js');
+    const cfgPath = require('./paths').configPath;
     try {
       if (fs.existsSync(cfgPath)) {
         let content = fs.readFileSync(cfgPath, 'utf8');

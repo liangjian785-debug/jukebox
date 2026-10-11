@@ -16,17 +16,18 @@ const app = express();
 const dataHandle = new DataStatistics();
 const feedback = new Feedback();
 const cache = new Cache();
-const globalCookie = GlobalCookie();
+const globalCookie = GlobalCookie(require('./paths').dataDir);
 
 
 // 每10分钟存一下数据
-config.useDataStatistics && setInterval(() => dataHandle.saveInfo(), 60000 * 10);
+const statisticsTimer = config.useDataStatistics ? setInterval(() => dataHandle.saveInfo(), 60000 * 10) : null;
+app.locals.shutdown = () => { clearInterval(statisticsTimer); };
 
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'jade');
 
-app.use(logger('dev'));
+if (process.env.JUKEBOX_DESKTOP !== '1') app.use(logger('dev'));
 app.use(express.json());
 app.use(express.urlencoded({extended: false}));
 app.use(cookieParser());

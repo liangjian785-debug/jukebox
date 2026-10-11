@@ -7,7 +7,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const LOG_DIR = path.join(__dirname, 'logs');
+const LOG_DIR = require('./paths').logsDir;
 const LOG_FILE = path.join(LOG_DIR, 'system.log');
 const MAX_AGE_MS = 72 * 3600 * 1000; // 72 小时
 
@@ -80,6 +80,8 @@ function cleanup() {
 
 // 启动清理 + 每小时自动清理
 cleanup();
-setInterval(cleanup, 3600 * 1000).unref();
+const cleanupTimer = setInterval(cleanup, 3600 * 1000); cleanupTimer.unref();
 
 module.exports = { log, readRecent, cleanup };
+
+module.exports.stop = () => clearInterval(cleanupTimer);

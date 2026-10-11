@@ -1,3 +1,4 @@
+const { dataPath } = require('../paths');
 const userAgent = require('useragent');
 const jsonFile = require('jsonfile');
 const moment = require('moment');
@@ -7,31 +8,13 @@ const fs = require('fs');
 class DataStatistics {
   // 全部数据、黑白名单内容读取并初始化
   constructor() {
-    // 白名单
-    jsonFile.readFile('data/whiteList.json')
-      .then((res) => {
-        this.whiteList = res;
-      }, (err) => {
-        this.whiteList = {};
-        jsonFile.writeFile('data/whiteList.json', {});
-      });
-
-    // 黑名单
-    jsonFile.readFile('data/blackList.json')
-      .then((res) => {
-        this.blackList = res;
-      }, (err) => {
-        this.blackList = {};
-        jsonFile.writeFile('data/blackList.json', {});
-      });
-
-    jsonFile.readFile('data/tempList.json')
-      .then((res) => {
-        this.tempList = res;
-      }, (err) => {
-        this.tempList = {};
-        jsonFile.writeFile('data/tempList.json', {});
-      });
+    for (const name of ['whiteList', 'blackList', 'tempList']) {
+      try { this[name] = jsonFile.readFileSync(dataPath(name + '.json')); }
+      catch (err) {
+        this[name] = {};
+        if (err.code === 'ENOENT') jsonFile.writeFileSync(dataPath(name + '.json'), {});
+      }
+    }
     this.updateTime = moment();
     this.lastSaveTime = moment();
     this.setSafeHead();
@@ -39,17 +22,15 @@ class DataStatistics {
     this.urlsMap = {};
     // 全部数据读取
     this.allData = {};
-    fs.readdirSync(path.join(__dirname, '../data/record')).forEach((v) => {
+    fs.readdirSync(dataPath('record')).forEach((v) => {
       const key = v.replace(/\.json/, '');
       // 内存中只记录15天数据
       this.earlyCountDate = moment().subtract(15, 'days').format('YYYYMMDD');
       if (key < this.earlyCountDate) {
         return;
       }
-      jsonFile.readFile(`data/record/${v}`)
-        .then((res) => {
-          this.allData[key] = res;
-        })
+      try { this.allData[key] = jsonFile.readFileSync(dataPath('record', v)); }
+      catch (_) { /* Ignore an invalid historical record without replacing it. */ }
     });
   }
 
@@ -68,8 +49,8 @@ class DataStatistics {
     const nt = this.updateTime.format('YYYYMMDD');
     const now = moment().valueOf();
     if (lt !== nt) {
-      jsonFile.writeFile(`data/record/${lt}.json`, this.allData[lt] || []);
-      this.safeHead();
+      jsonFile.writeFileSync(dataPath('record', lt + '.json'), this.allData[lt] || []);
+      this.setSafeHead();
       // 每天清一下 tempList
       Object.keys(this.tempList).forEach(k => {
         this.tempList[k] = this.tempList[k].filter((v) => v > (now - 3600000 * 6));
@@ -81,8 +62,8 @@ class DataStatistics {
       delete this.allData[this.earlyCountDate];
       this.earlyCountDate = moment(this.earlyCountDate, 'YYYYMMDD').add(1, 'days').format('YYYYMMDD');
     }
-    jsonFile.writeFile(`data/record/${nt}.json`, this.allData[nt] || []);
-    jsonFile.writeFile('data/tempList.json', this.tempList || {});
+    jsonFile.writeFileSync(dataPath('record', nt + '.json'), this.allData[nt] || []);
+    jsonFile.writeFileSync(dataPath('tempList.json'), this.tempList || {});
     this.lastSaveTime = moment();
   }
 
@@ -223,8 +204,8 @@ class DataStatistics {
 
   // 黑/白 名单写入json文件
   writeList() {
-    jsonFile.writeFile('data/whiteList.json', this.whiteList);
-    jsonFile.writeFile('data/blackList.json', this.blackList);
+    jsonFile.writeFileSync(dataPath('whiteList.json'), this.whiteList);
+    jsonFile.writeFileSync(dataPath('blackList.json'), this.blackList);
   }
 
   // 返回 黑/白 名单

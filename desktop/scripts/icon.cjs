@@ -1,0 +1,15 @@
+'use strict';
+const fs = require('fs'); const path = require('path');
+const source = path.resolve(__dirname, '../../web/public/favicon.png');
+const destination = path.resolve(__dirname, '../assets'); fs.mkdirSync(destination, { recursive: true });
+const pngTarget = path.join(destination, 'icon.png');
+require('child_process').execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'Add-Type -AssemblyName System.Drawing; $src=[System.Drawing.Image]::FromFile($env:JUKEBOX_ICON_SOURCE); $dst=New-Object System.Drawing.Bitmap 256,256; $g=[System.Drawing.Graphics]::FromImage($dst); $g.InterpolationMode=[System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic; $g.DrawImage($src,0,0,256,256); $dst.Save($env:JUKEBOX_ICON_TARGET,[System.Drawing.Imaging.ImageFormat]::Png); $g.Dispose(); $dst.Dispose(); $src.Dispose()'], { windowsHide:true, env:{ ...process.env, JUKEBOX_ICON_SOURCE:source, JUKEBOX_ICON_TARGET:pngTarget } });
+const png = fs.readFileSync(pngTarget);
+if (png.readUInt32BE(0) !== 0x89504e47) throw new Error('PNG required');
+const width = png.readUInt32BE(16), height = png.readUInt32BE(20);
+if (width > 256 || height > 256) throw new Error('Icon must be at most 256 pixels');
+const header = Buffer.alloc(22); header.writeUInt16LE(1, 2); header.writeUInt16LE(1, 4);
+header[6] = width === 256 ? 0 : width; header[7] = height === 256 ? 0 : height;
+header.writeUInt16LE(1, 10); header.writeUInt16LE(32, 12); header.writeUInt32LE(png.length, 14); header.writeUInt32LE(22, 18);
+fs.writeFileSync(path.join(destination, 'icon.ico'), Buffer.concat([header, png]));
+fs.writeFileSync(path.join(destination, 'icon.png'), png);

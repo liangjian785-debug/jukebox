@@ -4,8 +4,70 @@
 
 支持网易云音乐和 QQ 音乐。管理员可以控制播放、调整音量和输出设备、管理队列、切换背景歌单，并设置定时播放任务。
 
+## Windows 桌面版
+
+桌面版面向 Windows 10/11 x64，安装包名为 `Jukebox-Setup-<版本>-x64.exe`。安装包内置运行环境和 mpv，使用者无需安装 Node.js 或执行启动脚本。
+
+**[下载最新 Windows x64 安装程序](https://github.com/liangjian785-debug/jukebox/releases/latest/download/Jukebox-Setup-1.0.0-x64.exe)** · **[查看版本说明与校验文件](https://github.com/liangjian785-debug/jukebox/releases/latest)**
+
+源码可通过本仓库的 **Code → Download ZIP** 下载，或使用下文的 Git 命令获取。安装程序位于 Release 的 **Assets**，不需要下载整个源码仓库。
+
+1. 下载并运行安装程序。选择磁盘或父文件夹后，会自动添加 `JukeboxDesktop` 文件夹；安装完成打开程序。
+2. 首次启动设置至少 8 个字符的管理口令；之后在管理台用此口令登录。
+3. 等待状态显示“服务运行中”，点击“打开点歌台”或“打开管理台”。
+4. 在管理台保存自己的音乐平台 Cookie，点歌试听。
+5. 将主窗口显示的“手机点歌地址”分享给同一局域网的设备。
+
+### 软件窗口与退出
+
+首页与设置、点歌台、管理台在同一个窗口顶部切换，不会额外弹出窗口。标题栏支持拖动、最小化和最大化。
+
+关闭窗口会收起到托盘并继续运行。需要完全退出时，点击顶部右侧的 **退出软件**，或在系统托盘菜单中选择 **退出**，程序会停止自己的服务与播放器。**重启全部服务**会保存状态后重启；管理台的 **关闭服务**仅停止主服务，可以从首页点击 **启动主服务**恢复。
+
+### 端口与手机访问
+
+首页的 **端口设置**可以修改点歌服务端口（1024–65535，默认 8080）。保存后重启服务，手机点歌地址同步更新；下次启动继续使用这个端口。主端口被占用时，请在此处选择其他端口，程序不会结束占用它的应用。
+
+QQ 与网易云内部接口仅监听本机，默认使用 3400 和 4000；被占用时自动选择空闲端口，内部连接同步更新。手机只需访问首页显示的点歌地址，不需要访问这两个内部接口。
+
+### 修改管理口令
+
+在首页与设置的 **修改管理口令**中输入原口令、新口令和确认口令。新口令为 8–128 个字符；修改成功后，下次进入管理台使用新口令。运行中修改会重启主服务；主服务已停止时保持停止，重新启动后新口令生效。音乐平台登录信息和其他配置会保留。
+
+### 更新与用户数据
+
+更新前点击 **退出软件**，再运行新版安装程序并选择原安装位置。不要将 **关闭服务**当作退出整个应用。
+
+桌面用户数据保存在 `%APPDATA%/JukeboxDesktop`，可通过“用户数据”按钮打开。其中 `server/` 保存配置、队列和定时任务，`qq/` 保存 QQ Cookie。桌面版首次使用独立数据目录，不自动导入源码版的账号与队列；覆盖安装和默认卸载保留用户数据。
+
+安装包未做代码签名，Windows 可能显示未知发布者提示。请从本仓库 Release 下载，并使用同名 `.sha256` 文件核对安装程序；PowerShell 中可运行 `Get-FileHash -Algorithm SHA256 -LiteralPath './Jukebox-Setup-1.0.0-x64.exe'`。
+
+安装包包含第三方运行组件，其许可文件保存在安装目录的 `resources/licenses`，Electron 的许可文件位于安装目录。mpv、FFmpeg 版本、上游源码和构建来源记录在 [desktop/mpv-source.json](desktop/mpv-source.json)。
+
+### 从源码构建桌面安装包
+
+构建需要 Windows x64、Node.js 22.12 或更高版本、PowerShell 7 和 Git。在项目根目录运行：
+
+```powershell
+npm --prefix ./web ci
+npm --prefix ./web run build
+npm --prefix ./desktop ci --ignore-scripts
+node ./desktop/node_modules/electron/install.js
+pwsh -NoProfile -File ./desktop/scripts/fetch-mpv.ps1
+npm --prefix ./desktop run prepare-runtime
+npm --prefix ./desktop test
+npm --prefix ./desktop run build -- --config.electronDist=node_modules/electron/dist --publish never
+```
+
+播放器下载脚本验证固定版本和 SHA-256；准备脚本在独立 staging 安装后台生产依赖，排除本机 Cookie、配置、状态和日志。开发运行使用 `npm --prefix ./desktop start`，安装产物位于 `desktop/release/`。
+
+如果构建下载报证书链错误，可在当前 PowerShell 会话设置 `$env:NODE_OPTIONS = '--use-system-ca'` 后重试，以使用系统受信任证书；不要关闭证书验证。具体第三方组件版本和来源在 `desktop/mpv-source.json` 及安装资源的许可目录中记录。
+
+下面的“首次安装”步骤适用于保留的浏览器/源码运行方式。桌面安装包用户无需再次安装这些依赖。
+
 ## 目录
 
+- [Windows 桌面版](#windows-桌面版)
 - [安装前准备](#安装前准备)
 - [首次安装](#首次安装)
 - [启动与访问](#启动与访问)

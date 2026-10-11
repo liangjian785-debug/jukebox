@@ -1,14 +1,14 @@
+const { dataPath } = require('../paths');
 const jsonFile = require('jsonfile');
 
 class Feedback {
   constructor() {
-    jsonFile.readFile('data/feedback.json')
-      .then((res) => {
-        this.data = res;
-      }, (err) => {
-        this.data = { list: [], updateTime: new Date().getTime() };
-        jsonFile.writeFile('data/feedback.json', this.data);
-      });
+    try {
+      this.data = jsonFile.readFileSync(dataPath('feedback.json'));
+    } catch (err) {
+      this.data = { list: [], updateTime: Date.now() };
+      if (err.code === 'ENOENT') jsonFile.writeFileSync(dataPath('feedback.json'), this.data);
+    }
   }
 
   add(val) {
@@ -20,7 +20,7 @@ class Feedback {
   }
 
   write() {
-    jsonFile.writeFile('data/feedback.json', this.data);
+    jsonFile.writeFileSync(dataPath('feedback.json'), this.data);
   }
 
   delete(id) {

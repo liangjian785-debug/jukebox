@@ -1,0 +1,77 @@
+{
+  "name": "jukebox-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "局域网点歌机 Windows 桌面应用",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "prepare-runtime": "node scripts/prepare-runtime.cjs",
+    "build": "electron-builder --win nsis --x64",
+    "test": "node --test test/*.test.cjs"
+  },
+  "devDependencies": {
+    "electron": "44.7.0",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "io.github.liangjian785debug.jukebox",
+    "productName": "JukeboxDesktop",
+    "asar": true,
+    "directories": {
+      "output": "release",
+      "buildResources": "assets"
+    },
+    "files": [
+      "main.cjs",
+      "services.cjs",
+      "preload.cjs",
+      "wrappers/**",
+      "ui/**",
+      "assets/icon.png",
+      "assets/icon.ico",
+      "package.json",
+      "admin-key.cjs"
+    ],
+    "extraResources": [
+      {
+        "from": "staging/runtime",
+        "to": "runtime"
+      },
+      {
+        "from": "staging/mpv",
+        "to": "mpv"
+      },
+      {
+        "from": "staging/licenses",
+        "to": "licenses"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico",
+      "artifactName": "Jukebox-Setup-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": false,
+      "allowToChangeInstallationDirectory": false,
+      "deleteAppDataOnUninstall": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "include": "assets/installer.nsh"
+    }
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "author": "liangjian785-debug"
+}

@@ -27,3 +27,8 @@ mpv.exe
 Thumbs.db
 
 server/config.local.js.bak
+
+# 桌面构建资源与安装产物（不包含个人数据，按构建脚本生成）
+desktop/vendor/
+desktop/staging/
+desktop/release/

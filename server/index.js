@@ -24,6 +24,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
+app.use((req, res, next) => stopping ? res.status(503).json({ error: '服务正在停止' }) : next());
 app.use(express.json());
 app.use('/api', createRouter(io, player, playNext, { restart: doRestart, shutdown: doShutdown }));
 
@@ -39,12 +40,15 @@ app.get(/^(?!\/api\/).*/, (req, res) => {
 const broadcast = () => io.emit('state:update', state.snapshot());
 
 /** 播放循环（防重入） */
+let stopping = false;
+let shutdownPromise;
 let playing = false;
 const scheduledQueue = [];
 const scheduledReturnStack = [];
 let scheduledStopPending = false;
 async function playNext() {
-  if (playing) return;
+  if (playing || stopping) return;
+  playing = true;
   scheduledStopPending = false;
   let item;
   if (scheduledQueue.length) {
@@ -57,6 +61,7 @@ async function playNext() {
       // 心动FM：缓存空，异步拉取一批再取
       try {
         const songs = await netease.getFmSongs();
+        if (stopping) return;
         state.fillFm(songs);
       } catch (e) {
         console.log('[FM] 拉取推荐失败: ' + e.message);
@@ -67,7 +72,9 @@ async function playNext() {
       item = r.item || null;
     }
   }
+  if (stopping) return;
   if (!item) {
+    playing = false;
     state.current = null;
     broadcast();
     return;
@@ -79,11 +86,13 @@ async function playNext() {
   playing = true;
   try {
     const u = await music.getSongUrl(item.platform || 'netease', item.songId);
+    if (stopping) return;
     if (!u || !u.url) throw new Error('音源不可用（版权/VIP 限制或获取失败）');
     if (u.freeTrial) console.log(`[试听] ${item.name} 仅返回试听片段`);
     player.play(u.url);
     logger.log('info', `播放《${item.name}》- ${item.artists.join('/') || '未知歌手'} [${item.platform || 'netease'}]${u.freeTrial ? '（试听）' : ''}`, 'play');
   } catch (e) {
+    if (stopping) return;
     logger.log('error', `歌曲《${item.name}》播放失败：${e.message}（自动跳过）`, 'play');
     playing = false;
     playNext(); // 容错：单曲失败自动跳过，绝不卡死队列
@@ -97,6 +106,7 @@ player.onEnd = (err) => {
 };
 
 function playScheduled(task) {
+  if (stopping) return;
   if (state.current && !scheduledStopPending) {
     scheduledReturnStack.push(state.current);
   }
@@ -143,6 +153,7 @@ function portInUse(port) {
 
 // listen 失败兜底（端口被抢等）
 server.on('error', (e) => {
+  sendParent({ type: 'error', service: 'main', code: e.code || 'LISTEN_FAILED', message: e.code === 'EADDRINUSE' ? '主服务端口已被占用' : '主服务启动失败' });
   if (e.code === 'EADDRINUSE') {
     console.log(`端口 ${config.port} 已被占用，本实例退出（单实例保护）`);
     process.exit(1);
@@ -163,7 +174,7 @@ async function refreshPlayback() {
       currentPos = null;
     }
   }
-  if (seq !== calcSeq) return; // 已有更新的核算在途，本次结果过期
+  if (stopping || seq !== calcSeq) return; // 已有更新的核算在途，本次结果过期
   const now = Date.now();
   const curRemain =
     state.current && currentPos != null
@@ -187,23 +198,24 @@ state.setOnChange(() => {
 });
 
 // 定时兜底：每 5 秒核算一次（播放进度走秒、暂停/异常后的时间校准）
-setInterval(refreshPlayback, 5000).unref();
+const playbackTimer = setInterval(refreshPlayback, 5000); playbackTimer.unref();
 
 // 意外暂停自动恢复：蓝牙耳机取下等音频设备事件可能让 mpv 意外暂停；
 // 若非管理端主动暂停（manualPaused），自动继续播放（最长 2.5 秒内恢复）
-setInterval(async () => {
+const pauseTimer = setInterval(async () => {
+  if (stopping) return;
   if (!player.isPlaying()) return; // 未播放不处理
   if (player.manualPaused) return; // 管理端主动暂停：不自动恢复
   try {
     const paused = await player.getPaused();
-    if (paused === true) {
+    if (!stopping && paused === true) {
       logger.log('warn', '检测到意外暂停（可能音频设备切换/蓝牙断开），自动继续播放', 'play');
       player.resume();
     }
   } catch (e) {
     /* 查询失败忽略，下轮再试 */
   }
-}, 2500).unref();
+}, 2500); pauseTimer.unref();
 
 async function init() {
   // 启动恢复：队列/用户/播放源（当前歌曲按方案 A 从头重播）
@@ -215,16 +227,14 @@ async function init() {
     logger.log('info', '服务启动（全新开始，无历史状态）', 'system');
   }
 
-  if (config.playlistId) {
-    try {
-      const pl = await netease.getPlaylist(config.playlistId);
-      state.setPlaylist(pl.id, pl.name, pl.songs);
-      console.log(`默认歌单已加载：${pl.name}（${pl.songs.length} 首）`);
-    } catch (e) {
-      console.log(`默认歌单加载失败：${e.message}（将以仅插播模式运行）`);
-    }
-  } else {
-    console.log('未配置默认歌单（config.playlistId=0），将以仅插播模式运行');
+  if (!config.autoStart) {
+      // 默认暂停：不自动出声；恢复中未播完的歌放回队列第一位待播
+      if (state.current) {
+        state.userQueue.unshift(state.current);
+        state.current = null;
+        state.bump(); // 落盘
+        logger.log('info', '启动默认暂停：恢复的歌曲已放回队列第一位，等待开始播放', 'system');
+      }
   }
 
   // 单实例保护：8080 已被监听（已有实例在跑）→ 拒绝启动，防止双开重复播放
@@ -234,7 +244,24 @@ async function init() {
     process.exit(1);
   }
 
-  server.listen(config.port, '0.0.0.0', () => {
+  if (stopping) return;
+  server.listen(config.port, '0.0.0.0', async () => {
+    scheduler.start(playScheduled);
+    sendParent({ type: 'ready', service: 'main', port: server.address().port });
+    if (config.playlistId) {
+      try {
+        const pl = await netease.getPlaylist(config.playlistId);
+        if (stopping) return;
+        state.setPlaylist(pl.id, pl.name, pl.songs);
+        console.log(`默认歌单已加载：${pl.name}（${pl.songs.length} 首）`);
+      } catch (e) {
+        console.log(`默认歌单加载失败：${e.message}（将以仅插播模式运行）`);
+      }
+    } else {
+      console.log('未配置默认歌单（config.playlistId=0），将以仅插播模式运行');
+    }
+
+    if (stopping) return;
     const ip = lanIP();
     console.log('----------------------------------------');
     console.log(`LAN 点歌机已启动：http://${ip}:${config.port}`);
@@ -245,32 +272,27 @@ async function init() {
       if (state.current) playCurrent();
       else playNext();
     } else {
-      // 默认暂停：不自动出声；恢复中未播完的歌放回队列第一位待播
-      if (state.current) {
-        state.userQueue.unshift(state.current);
-        state.current = null;
-        state.bump(); // 落盘
-        logger.log('info', '启动默认暂停：恢复的歌曲已放回队列第一位，等待开始播放', 'system');
-      }
       broadcast();
       logger.log('info', '启动默认暂停（不自动播放），可在管理台点击"开始播放"', 'system');
     }
     refreshPlayback(); // 启动核算一次（恢复的队列时长/预计时间）
-    scheduler.start(playScheduled);
   });
 }
 
 /** 恢复播放：重播重启前正在播放的歌曲（方案 A） */
 async function playCurrent() {
+  if (stopping || playing) return;
   const item = state.current;
   if (!item) return;
   playing = true;
   try {
     const u = await music.getSongUrl(item.platform || 'netease', item.songId);
+    if (stopping) return;
     if (!u || !u.url) throw new Error('音源不可用');
     player.play(u.url);
     console.log(`[恢复播放] ${item.name} - ${item.artists.join('/') || '未知歌手'}`);
   } catch (e) {
+    if (stopping) return;
     console.log(`[恢复失败跳过] ${item.name}: ${e.message}`);
     playing = false;
     state.current = null;
@@ -278,51 +300,53 @@ async function playCurrent() {
   }
 }
 
-// 退出时强制落盘
+function sendParent(message) {
+  if (process.parentPort) process.parentPort.postMessage(message);
+}
+
 function shutdown() {
+  if (shutdownPromise) return shutdownPromise;
+  stopping = true;
+  clearInterval(playbackTimer);
+  clearInterval(pauseTimer);
+  clearInterval(heartbeatTimer);
+  scheduler.stop();
+  logger.stop();
+  state.setOnChange(() => {});
   persistence.flush(() => state.snapshotForDisk());
-  process.exit(0);
+  shutdownPromise = (async () => {
+    await player.shutdown();
+    await new Promise(resolve => io.close(resolve));
+    if (server.listening) await new Promise(resolve => server.close(resolve));
+    process.exit(0);
+  })();
+  return shutdownPromise;
 }
 
-/** 平滑重启：先落盘，拉一个新进程（延迟2秒等端口释放），再退出自己 */
 function doRestart() {
-  persistence.flush(() => state.snapshotForDisk());
-  const isWin = process.platform === 'win32';
-  try {
-    if (isWin) {
-      spawn('cmd', ['/c', 'timeout /t 2 /nobreak >nul & node index.js'], {
-        detached: true,
-        stdio: 'ignore',
-        cwd: __dirname,
-        windowsHide: true,
-      }).unref();
-    } else {
-      spawn('sh', ['-c', 'sleep 2 && node index.js'], {
-        detached: true,
-        stdio: 'ignore',
-        cwd: __dirname,
-      }).unref();
-    }
-    logger.log('action', '服务重启中…', 'admin');
-  } catch (e) {
-    logger.log('error', '重启拉起失败: ' + e.message, 'system');
+  if (stopping) return;
+  if (process.env.JUKEBOX_DESKTOP === '1') {
+    sendParent({ type: 'request-restart', service: 'main' });
+    return;
   }
-  setTimeout(() => process.exit(0), 300);
-}
-
-function doShutdown() {
-  logger.log('action', '服务关闭', 'admin');
+  const command = process.platform === 'win32' ? 'cmd' : 'sh';
+  const args = process.platform === 'win32' ? ['/c', 'timeout /t 2 /nobreak >nul & node index.js'] : ['-c', 'sleep 2 && node index.js'];
+  spawn(command, args, { detached: true, stdio: 'ignore', cwd: __dirname, windowsHide: true }).unref();
   shutdown();
 }
-
+function doShutdown() {
+  if (process.env.JUKEBOX_DESKTOP === '1') sendParent({ type: 'request-stop', service: 'main' });
+  else shutdown();
+}
+let lastHeartbeat = Date.now();
+const heartbeatTimer = process.env.JUKEBOX_DESKTOP === '1' ? setInterval(() => {
+  if (Date.now() - lastHeartbeat >= 15000) shutdown();
+}, 1000) : null;
+if (process.parentPort) process.parentPort.on('message', event => {
+  const message = event.data;
+  if (message && message.type === 'heartbeat') lastHeartbeat = Date.now();
+  if (message && message.type === 'shutdown') shutdown();
+});
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
-process.on('exit', () => {
-  try {
-    persistence.flush(() => state.snapshotForDisk());
-  } catch (e) {
-    /* ignore */
-  }
-});
-
 init();

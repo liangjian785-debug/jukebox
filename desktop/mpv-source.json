@@ -1,0 +1,11 @@
+{
+  "release": "20261011",
+  "version": "v0.41.0-1122-gaccb7b282",
+  "architecture": "x86_64",
+  "source": "https://github.com/shinchiro/mpv-winbuild-cmake/releases/download/20261011/mpv-x86_64-20261011-git-accb7b2821.7z",
+  "archiveSha256": "afdf8a0422510f0dd375196ef406607984d3861cf033fc9e74ed7997c8db4700",
+  "executableSha256": "3d23fc8110508fd6a05e5331a2ed19dc8fa3dd9196d0f56f5217038cf670c2db",
+  "mpvSource": "https://github.com/mpv-player/mpv/tree/accb7b2821",
+  "ffmpegSource": "https://github.com/FFmpeg/FFmpeg/tree/8d8c75f2b",
+  "buildRecipe": "https://github.com/shinchiro/mpv-winbuild-cmake/tree/20261011"
+}

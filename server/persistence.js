@@ -6,7 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const FILE = path.join(__dirname, 'state.json');
+const FILE = require('./paths').statePath;
 let timer = null;
 
 function save(getData) {

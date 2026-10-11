@@ -6,7 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const FILE = path.join(__dirname, 'channels.json');
+const FILE = require('./paths').channelsPath;
 const DEFAULTS = { netease: true, qq: true };
 
 function load() {

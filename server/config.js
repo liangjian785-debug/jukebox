@@ -27,9 +27,9 @@ const defaults = {
 
 let local = {};
 try {
-  local = require('./config.local.js');
+  local = require(require('./paths').configPath);
 } catch (e) {
   // 无本地配置，使用默认值
 }
 
-module.exports = { ...defaults, ...local };
+module.exports = { ...defaults, ...local, ...(process.env.JUKEBOX_MAIN_PORT ? { port: Number(process.env.JUKEBOX_MAIN_PORT) } : {}), ...(process.env.JUKEBOX_QQ_PORT ? { qqApiBase: 'http://127.0.0.1:' + process.env.JUKEBOX_QQ_PORT } : {}), ...(process.env.JUKEBOX_NETEASE_PORT ? { neteaseApiBase: 'http://127.0.0.1:' + process.env.JUKEBOX_NETEASE_PORT } : {}), ...(process.env.JUKEBOX_MPV_PATH ? { mpvPath: process.env.JUKEBOX_MPV_PATH } : {}) };

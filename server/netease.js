@@ -17,7 +17,7 @@ function headers() {
 async function getJson(path, opts = {}) {
   // 搜索等公开接口匿名请求（避免触发网易云对登录态的搜索频率风控 405）
   const useCookie = opts.auth !== false;
-  const res = await fetch(api(path), { headers: useCookie ? headers() : {} });
+  const res = await fetch(api(path), { headers: useCookie ? headers() : {}, signal: AbortSignal.timeout(10000) });
   if (!res.ok) throw new Error(`API ${path} -> HTTP ${res.status}`);
   return res.json();
 }

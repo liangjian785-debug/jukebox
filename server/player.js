@@ -4,29 +4,45 @@
  * 播完进程自然退出触发 onEnd；跳过 = kill 进程。
  * Windows 用命名管道 \\.\pipe\jukebox-mpv，Linux/macOS 用 unix socket。
  */
-const { spawn } = require('child_process');
+const { spawn, execFile } = require('child_process');
 const net = require('net');
 const os = require('os');
 const path = require('path');
 const config = require('./config');
 
+const instance = (process.env.JUKEBOX_INSTANCE_ID || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80);
+const ipcSuffix = instance ? '-' + instance : '';
 const IPC_NAME =
-  process.platform === 'win32' ? '\\\\.\\pipe\\jukebox-mpv' : path.join(os.tmpdir(), 'jukebox-mpv.sock');
+  process.platform === 'win32' ? '\\\\.\\pipe\\jukebox-mpv' + ipcSuffix : path.join(os.tmpdir(), 'jukebox-mpv' + ipcSuffix + '.sock');
 
 class Player {
   constructor() {
     this.proc = null;
+    this.children = new Set();
+    this.stopping = false;
     this.ipc = null; // IPC 连接
     this.paused = false;
     this.manualPaused = false; // 主动暂停标记（管理端操作）；意外暂停(设备事件)不置位
     this.volume = config.volume;
     this.onEnd = null; // (err?) => void
     this._ended = false;
+    this._generation = 0;
     this._ipcRetries = 0;
+  }
+
+  _track(child) {
+    this.children.add(child);
+    if (process.parentPort && child.pid) process.parentPort.postMessage({ type: 'player-spawn', pid: child.pid });
+    child.once('close', () => {
+      this.children.delete(child);
+      if (process.parentPort && child.pid) process.parentPort.postMessage({ type: 'player-exit', pid: child.pid });
+    });
   }
 
   /** 播放一个 URL（自动停掉上一个） */
   play(url) {
+    if (this.stopping) return;
+    const generation = ++this._generation;
     this.stop();
     this._ended = false;
     this.paused = false;
@@ -44,19 +60,22 @@ class Player {
       return;
     }
     this.proc = proc;
+    this._track(proc);
     proc.on('error', (err) => {
+      if (generation !== this._generation) return;
       if (this.proc === proc) this.proc = null;
-      if (!this._ended) {
+      if (!this.stopping && !this._ended) {
         this._ended = true;
         if (this.onEnd) this.onEnd(err);
       }
     });
     proc.on('exit', () => {
+      if (generation !== this._generation) return;
       if (this.proc === proc) {
         this.proc = null;
         this._closeIpc();
       }
-      if (!this._ended) {
+      if (!this.stopping && !this._ended) {
         this._ended = true;
         if (this.onEnd) this.onEnd();
       }
@@ -221,6 +240,26 @@ class Player {
       }
       this.proc = null;
     }
+  }
+
+  enumerateDevices(callback) {
+    if (this.stopping) return callback(new Error('Service stopping'), '', '');
+    const child = execFile(config.mpvPath, ['--audio-device=help'], { windowsHide: true, timeout: 5000 }, callback);
+    this._track(child);
+    return child;
+  }
+
+  shutdown() {
+    if (this.shutdownPromise) return this.shutdownPromise;
+    this.stopping = true;
+    this.onEnd = null;
+    this._closeIpc();
+    this.shutdownPromise = Promise.all([...this.children].map(child => new Promise(resolve => {
+      if (child.exitCode != null || child.signalCode != null) return resolve();
+      child.once('close', resolve);
+      try { child.kill(); } catch (_) { resolve(); }
+    })));
+    return this.shutdownPromise;
   }
 
   isPlaying() {

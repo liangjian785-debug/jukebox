@@ -1,0 +1,16 @@
+'use strict';
+const path = require('path');
+const http = require('http');
+const { lifecycle, directories } = require('./common.cjs');
+const control = lifecycle('qq');
+directories();
+process.env.HOST = '127.0.0.1';
+const root = path.join(process.env.JUKEBOX_RUNTIME_DIR, 'QQMusicApi');
+process.chdir(path.join(process.env.JUKEBOX_DATA_DIR, 'qq'));
+global.QQ = '';
+global.PORT = Number(process.env.PORT);
+global.useDataStatistics = false;
+const app = require(path.join(root, 'app.js'));
+const server = http.createServer(app);
+control.attach(server, () => app.locals.shutdown?.());
+server.listen(global.PORT, '127.0.0.1');

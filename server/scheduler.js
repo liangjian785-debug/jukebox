@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const FILE = path.join(__dirname, 'schedules.json');
+const FILE = require('./paths').schedulesPath;
 let tasks = load();
 let timer = null;
 let onDue = null;
@@ -133,4 +133,5 @@ function start(handler) {
   timer.unref();
 }
 
-module.exports = { list, add, update, remove, start };
+function stop() { clearInterval(timer); timer = null; onDue = null; }
+module.exports = { list, add, update, remove, start, stop };
