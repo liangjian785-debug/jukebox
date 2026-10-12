@@ -4,11 +4,13 @@
 
 支持网易云音乐和 QQ 音乐。管理员可以控制播放、调整音量和输出设备、管理队列、切换背景歌单，并设置定时播放任务。
 
+本文按 **v1.0.16** 编写：支持双平台歌单管理、QQ 私人雷达、歌曲响度均衡，以及带独立进度窗口的自动更新。推荐普通用户使用 Windows 安装包；源码运行和构建步骤单独列在下文。
+
 ## Windows 桌面版
 
 桌面版面向 Windows 10/11 x64，安装包名为 `Jukebox-Setup-<版本>-x64.exe`。安装包内置运行环境和 mpv，使用者无需安装 Node.js 或执行启动脚本。
 
-**[下载 Windows x64 安装程序 v1.0.11](https://github.com/liangjian785-debug/jukebox/releases/download/v1.0.11/Jukebox-Setup-1.0.11-x64.exe)** · **[查看最新版本说明与校验文件](https://github.com/liangjian785-debug/jukebox/releases/latest)**
+**[下载 Windows x64 安装程序 v1.0.16](https://github.com/sangui0312/jukebox/releases/download/v1.0.16/Jukebox-Setup-1.0.16-x64.exe)** · **[查看最新版本说明与校验文件](https://github.com/sangui0312/jukebox/releases/latest)**
 
 源码可通过本仓库的 **Code → Download ZIP** 下载，或使用下文的 Git 命令获取。安装程序位于 Release 的 **Assets**，不需要下载整个源码仓库。
 
@@ -20,19 +22,19 @@
 
 ### 软件窗口与退出
 
-首页与设置、点歌台、管理台在同一个窗口顶部切换，不会额外弹出窗口。标题栏支持拖动、最小化和最大化。
+首页与设置、点歌台、管理台在同一个窗口顶部切换，采用统一的页面风格。标题栏支持拖动、最小化和最大化；执行在线更新时会额外弹出独立更新窗口。
 
 关闭窗口会收起到托盘并继续运行。需要完全退出时，点击顶部右侧的 **退出软件**，或在系统托盘菜单中选择 **退出**，程序会停止自己的服务与播放器。**重启全部服务**会保存状态后重启；管理台的 **关闭服务**仅停止主服务，可以从首页点击 **启动主服务**恢复。
 
 ### 端口与手机访问
 
-首页的 **端口设置**可以修改点歌服务端口（1024–65535，默认 8080）。保存后重启服务，手机点歌地址同步更新；下次启动继续使用这个端口。主端口被占用时，请在此处选择其他端口，程序不会结束占用它的应用。
+首页的 **端口设置**默认收起，点击展开后可以修改点歌服务端口（1024–65535，默认 8080）。保存后重启服务，手机点歌地址同步更新；下次启动继续使用这个端口。主端口被占用时，请在此处选择其他端口，程序不会结束占用它的应用。更改端口后，也要更新防火墙的放行规则。
 
 QQ 与网易云内部接口仅监听本机，默认使用 3400 和 4000；被占用时自动选择空闲端口，内部连接同步更新。手机只需访问首页显示的点歌地址，不需要访问这两个内部接口。
 
 ### 修改管理口令
 
-在首页与设置的 **修改管理口令**中输入原口令、新口令和确认口令。新口令为 8–128 个字符；修改成功后，下次进入管理台使用新口令。运行中修改会重启主服务；主服务已停止时保持停止，重新启动后新口令生效。音乐平台登录信息和其他配置会保留。
+在首页与设置中展开 **修改管理口令**，输入原口令、新口令和确认口令。新口令为 8–128 个字符；修改成功后，下次进入管理台使用新口令。运行中修改会重启主服务；主服务已停止时保持停止，重新启动后新口令生效。音乐平台登录信息和其他配置会保留。
 
 ### 程序内登录音乐平台（桌面版 v1.0.2 起）
 
@@ -46,13 +48,22 @@ QQ 账号在音乐接口启动时尝试续期一次，运行期间每 4 小时�
 
 ### 更新与用户数据
 
-桌面版 v1.0.11 起，首页的 **软件更新**会在启动时从本仓库 GitHub Releases 检查新版，也可点击 **检查更新**。发现新版后显示版本说明；点击 **下载更新** 才下载，不会自动中断播放。下载并校验完成后，由你点击 **退出软件** 或托盘 **退出**，程序保存数据、停止服务后自动安装，安装完成后自动启动新版。右上角 × 只会收起窗口，不会执行安装。网络或校验失败时可重新检查，或打开 **GitHub 版本页面**手动下载。
+首页的 **软件更新**会在启动时从本仓库 GitHub Releases 检查新版，也可点击 **检查更新**。发现新版后显示版本说明，点击 **立即更新** 才开始下载。
 
-更新前点击 **退出软件**，再运行新版安装程序并选择原安装位置。不要将 **关闭服务**当作退出整个应用。
+v1.0.15 及之后的版本会自动完成更新：
+
+1. 弹出独立更新窗口，显示下载百分比；下载期间主程序继续运行。
+2. 安装包下载并校验成功后，保存队列和用户数据，停止服务并自动退出主程序。
+3. 独立窗口继续显示安装状态；安装阶段显示等待动画，不提供准确百分比。
+4. 安装完成后自动启动新版，更新窗口随后关闭。默认仍保持暂停，点击“开始播放”继续听歌。
+
+无需手动退出。下载或校验失败时不会安装更新，可关闭失败提示窗口并重新检查，或打开 **GitHub 版本页面**手动下载。安装或启动超过约 5 分钟时，窗口会提示可以关闭并手动打开点歌机。
+
+v1.0.14 及更早版本仍按旧界面提示自行退出一次，升级后才使用新流程。手动安装新版时，也应先点击 **退出软件**或托盘 **退出**，再选择原安装位置覆盖安装；**关闭服务**和右上角 × 都不等于退出整个应用。
 
 桌面用户数据保存在 `%APPDATA%/JukeboxDesktop`，可通过“用户数据”按钮打开。其中 `server/` 保存配置、队列和定时任务，`qq/` 保存 QQ Cookie。桌面版首次使用独立数据目录，不自动导入源码版的账号与队列；覆盖安装和默认卸载保留用户数据。
 
-安装包未做代码签名，Windows 可能显示未知发布者提示。请从本仓库 Release 下载，并使用同名 `.sha256` 文件核对安装程序；PowerShell 中可运行 `Get-FileHash -Algorithm SHA256 -LiteralPath './Jukebox-Setup-1.0.11-x64.exe'`。
+安装包未做代码签名，Windows 可能显示未知发布者提示。请从本仓库 Release 下载，并使用同名 `.sha256` 文件核对安装程序；PowerShell 中可运行 `Get-FileHash -Algorithm SHA256 -LiteralPath './Jukebox-Setup-1.0.16-x64.exe'`。
 
 安装包包含第三方运行组件，其许可文件保存在安装目录的 `resources/licenses`，Electron 的许可文件位于安装目录。mpv、FFmpeg 版本、上游源码和构建来源记录在 [desktop/mpv-source.json](desktop/mpv-source.json)。
 
@@ -92,6 +103,7 @@ npm --prefix ./desktop run build -- --config.electronDist=node_modules/electron/
 - [关闭重启与备份](#关闭重启与备份)
 - [常见问题](#常见问题)
 - [配置项参考](#配置项参考)
+- [使用的开源项目](#使用的开源项目)
 
 ## 安装前准备
 
@@ -99,7 +111,7 @@ npm --prefix ./desktop run build -- --config.electronDist=node_modules/electron/
 
 需要安装：
 
-- Node.js 18 或更高版本，安装时启用 PATH 选项。
+- Node.js 22.12 或更高版本，安装时启用 PATH 选项；与桌面构建使用同一版本可避免依赖的运行环境要求不一致。
 - [mpv 播放器](https://mpv.io/)，用于实际播放音频。
 - PowerShell 7，用于执行本文的 Windows 安装命令。文本配置文件使用 UTF-8 编码。
 - Git（可选）：使用 Git 下载项目时需要；也可在仓库页面选择 **Code → Download ZIP**，解压使用。
@@ -111,7 +123,7 @@ npm --prefix ./desktop run build -- --config.electronDist=node_modules/electron/
 ### 1. 下载并进入项目目录
 
 ```powershell
-git clone https://github.com/liangjian785-debug/jukebox.git
+git clone https://github.com/sangui0312/jukebox.git
 Set-Location -LiteralPath './jukebox'
 ```
 
@@ -151,6 +163,8 @@ autoStart: false,
 - `adminKey`：管理员登录口令，必须自行设置；留空会禁用管理功能。
 - `mpvPath`：填写真实的 mpv 程序位置。已加入 PATH 时可保留 `'mpv'`。Windows 路径建议使用 `/`。
 - `playlistId`：默认网易云歌单 ID；未配置或设为 `0` 时使用热歌榜（3778678），已有自选歌单保留。
+- `qqPlaylistId`：QQ 自选歌单 ID，默认 `0` 表示使用 QQ 热歌榜；通常在管理台搜索名称或粘贴链接添加即可，无需手填 ID。
+- `loudnessNormalization`：默认 `true`，开启双平台响度均衡；设为 `false` 可关闭。
 - `autoStart`：默认 `false`，启动后等待管理员点击“开始播放”。
 
 配置格式为 JavaScript，字符串保留引号，字段之间保留逗号。使用 UTF-8 保存。修改本地配置后重启主服务生效。
@@ -210,7 +224,7 @@ autoStart: false,
 3. 点击结果中的点歌按钮；也可以从榜单中选择歌曲。
 4. 在插播队列中查看排序、点歌人和预计播完时间。
 
-普通点歌排在插播队列末尾，当前歌曲结束后依次播放。用户队列优先于背景歌单或心动 FM。
+普通点歌排在插播队列末尾，当前歌曲结束后依次播放。用户队列优先于四种背景播放源：网易云歌单、心动 FM、QQ 歌单和 QQ 私人雷达。
 
 默认每位用户最多保留 10 首待播歌曲，整个队列最多 300 首。同一平台的同一首歌曲正在播放或已经排队时，不能重复添加。
 
@@ -234,10 +248,12 @@ autoStart: false,
 
 - **开始播放**：播放器未运行时，启动待播歌曲或背景音乐。
 - **暂停 / 继续**：暂停当前歌曲，或继续播放。
-- **下一首**：结束当前歌曲，切换到下一首。
+- **跳过**：结束当前歌曲，切换到下一首。
 - **音量**：调整播放器音量，范围 0–100；电脑和音响自身也需有音量。
-- **音频设备**：选择输出设备，或切回系统默认输出。
+- **音频输出**：选择输出设备，或切回系统默认输出。
 - **投票设置**：调整跳过所需票数和顶歌所需次数。
+
+v1.0.16 默认对所有播放源启用响度均衡，目标为 -16 LUFS，真峰值上限为 -1.5 dBTP。该处理作用于音源，音量滑块仍控制最终音量；暂停、继续和切歌保留约 1 秒淡入淡出。实时均衡会减少歌曲间的响度差异，但不保证所有歌曲的听感完全一致。
 
 ### 管理端点歌与队列管理
 
@@ -262,7 +278,7 @@ autoStart: false,
 - **QQ 歌单**：默认使用 QQ 热歌榜，也可选择自选 QQ 歌单，随机循环播放。
 - **QQ 私人雷达**：使用 QQ 个性电台推荐，需要可用的 QQ 音乐登录状态。
 
-在歌单管理区域先选择网易云或 QQ 音乐，再输入歌单名称搜索后点击“添加”；也可粘贴对应平台的歌单分享链接（支持短链接）或输入歌单 ID。两平台的预设与已选歌单独立保存，点击预设会启用对应平台的歌单播放源；QQ 页可点击默认热歌榜恢复默认。
+在歌单管理区域先选择网易云或 QQ 音乐，再输入歌单名称搜索后点击“添加”；也可粘贴对应平台的歌单分享链接（支持短链接）或输入歌单 ID。两平台的预设与已选歌单独立保存，点击预设会启用对应平台的歌单播放源；QQ 页可点击默认热歌榜恢复默认。播放源旁的标签会随当前平台显示“网易云”或“QQ音乐”；切换管理标签只切换歌单列表，点击歌单预设才会切换播放源。
 
 未配置歌单时默认使用热歌榜。程序启动仍保持暂停；点击开始播放后，用户队列为空时播放所选背景播放源。歌单加载失败时等待点歌。
 
@@ -278,6 +294,8 @@ Cookie 让音乐接口使用你的登录状态。仅能搜索或查看榜单，�
 
 ### 获取并保存
 
+桌面版优先使用管理台中的 **登录网易云 / 登录QQ音乐**，在程序内的官方页面登录后自动验证并保存。下面的手动复制方法适用于浏览器/源码运行方式。
+
 1. 在浏览器登录对应音乐网站：网易云 `music.163.com`，QQ 音乐 `y.qq.com`。
 2. 按 `F12` 打开开发者工具，进入 **Network / 网络**。
 3. 刷新页面，选择音乐网站的一条请求，在 **Request Headers / 请求标头** 中找到 `Cookie`。
@@ -289,8 +307,8 @@ Cookie 让音乐接口使用你的登录状态。仅能搜索或查看榜单，�
 
 ### 保存位置与有效性
 
-- 网易云 Cookie 保存到 `server/config.local.js`，首次使用前需创建该文件。
-- QQ 音乐 Cookie 保存到 `QQMusicApi/data/cookie.json`，接口重启后重新读取。
+- 桌面版：网易云 Cookie 保存到 `%APPDATA%/JukeboxDesktop/server/config.local.js`，QQ 音乐 Cookie 保存到 `%APPDATA%/JukeboxDesktop/qq/cookie.json`。这些目录由程序创建。
+- 源码版：网易云 Cookie 保存到 `server/config.local.js`，首次使用前需创建该文件；QQ 音乐 Cookie 保存到 `QQMusicApi/data/cookie.json`。
 - QQ 音乐的“已配置”仅表示本地 Cookie 文件存在，不等于平台已验证登录态有效。
 
 Cookie 可能被平台判定过期或失效，程序不能保证永久有效。失效后重新登录并保存新的 Cookie。Cookie 是账号凭据，分享日志或备份时不要公开其值。
@@ -321,13 +339,15 @@ Cookie 可能被平台判定过期或失效，程序不能保证永久有效。�
 
 管理台“系统控制”提供重启和关闭功能，操作前保存状态。这里控制的是主服务，两个音乐 API 为独立进程。
 
-关闭后再次双击 `start-silent.vbs` 启动。关闭浏览器不会停止后台服务，静默运行时也可以通过管理台控制。
+桌面版可在首页 **启动主服务**，或选择 **重启全部服务**恢复全部服务；完全退出时使用 **退出软件**或托盘 **退出**。源码版关闭后再次双击 `start-silent.vbs` 启动。关闭浏览器不会停止后台服务，静默运行时也可以通过管理台控制。
 
 默认 `autoStart: false` 时，重启后等待点击“开始播放”，此前未播完的歌曲放回队列首位。恢复播放从歌曲开头开始。
 
 ### 备份与迁移
 
-先关闭主服务，再备份以下实际存在的文件：
+桌面版先完全退出程序，再备份 `%APPDATA%/JukeboxDesktop` 整个用户数据目录；其中还包括桌面端口设置和平台登录会话。可以从首页的 **用户数据**按钮打开该目录。迁移到新电脑后，音乐账号可能需要重新登录。
+
+源码版先关闭服务，再备份以下实际存在的文件：
 
 | 文件 | 内容 |
 | --- | --- |
@@ -344,7 +364,7 @@ Cookie 可能被平台判定过期或失效，程序不能保证永久有效。�
 
 ### 网页打不开
 
-先在服务电脑打开 `http://127.0.0.1:8080`。本机也打不开时，检查 Node.js、依赖安装和日志：
+先在服务电脑打开 `http://127.0.0.1:8080`，端口修改过则换成实际端口。桌面版检查首页是否“服务运行中”，可点击 **重启全部服务**并查看“日志目录”。源码版本机也打不开时，检查 Node.js、依赖安装和日志：
 
 ```powershell
 # 在项目根目录执行
@@ -356,6 +376,27 @@ Test-NetConnection 127.0.0.1 -Port 8080
 
 本机可访问而其他设备不能访问时，检查服务电脑 IP、访客 Wi-Fi 隔离、网络互通及 Windows 防火墙的主服务访问规则。
 
+### 服务端能打开，其他用户无法访问（防火墙）
+
+服务电脑开启防火墙且没有放行点歌服务时，其他用户可能无法访问，即使本机能正常打开页面。推荐添加防火墙入站规则放行实际使用的 **TCP 主服务端口**（默认 `8080`），无需长期关闭防火墙。
+
+1. 确认服务电脑和其他用户连接同一局域网，使用首页显示的服务电脑 IP 地址访问，不要在手机上使用 `127.0.0.1`。
+2. 在 Windows 中打开 **Windows 安全中心 → 防火墙和网络保护 → 高级设置 → 入站规则 → 新建规则**。
+3. 选择 **端口 → TCP → 特定本地端口**，填写实际服务端口，例如 `8080`；选择 **允许连接**。
+4. 勾选当前可信局域网对应的网络配置文件（如“专用”或组织的“域”），给规则命名后保存。
+5. 重新用其他设备访问。端口更改后，需要同步修改或重新建立此规则；手机访问无需放行内部 API 的 `3400` 和 `4000` 端口。
+
+也可以在服务电脑以管理员身份打开 PowerShell，为**专用网络的本地子网**添加规则：
+
+```powershell
+# 8080 改为首页显示的实际主服务端口；此示例仅适用于专用网络
+New-NetFirewallRule -DisplayName '局域网点歌机 TCP 8080' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8080 -Profile Private -RemoteAddress LocalSubnet
+```
+
+命令参数说明见 [Microsoft 的 New-NetFirewallRule 文档](https://learn.microsoft.com/en-us/powershell/module/netsecurity/new-netfirewallrule)。如果当前是“公用”网络，上面的专用网络规则不会生效，应先核对当前网络类型；只把可信局域网设为专用网络。
+
+也可在可信局域网中**短暂关闭当前网络的防火墙进行排查**；若关闭后恢复访问，重新开启防火墙并按上述方法放行。若安装了其他安全软件，还需检查其防火墙规则。放行后仍无法访问时，继续检查 IP 地址、访客网络隔离和服务状态。
+
 ### 能点歌但没有声音
 
 1. 管理台点击“开始播放”，确认未暂停。
@@ -364,6 +405,12 @@ Test-NetConnection 127.0.0.1 -Port 8080
 4. 查看系统日志是否有音源获取失败，换一首可播放歌曲排除单曲权限问题。
 
 音频由服务电脑输出，检查该电脑连接的音响。
+
+### 每首歌的音量仍有差异
+
+v1.0.16 默认开启自动响度均衡；若使用旧版本，先升级。若手动配置过 `loudnessNormalization: false`，改为 `true` 后重启主服务。音量滑块、Windows 音量和音响音量控制整体输出，不会单独统一每首歌的录音响度。
+
+在线歌曲使用实时均衡，安静前奏、强弱变化和不同录音的听感仍可能不同。淡入淡出处理播放过渡，与响度均衡分别起作用。
 
 ### QQ 音乐或网易云无法连接
 
@@ -376,7 +423,7 @@ Get-Content -LiteralPath './server/logs/qqmusic-api.log' -Encoding utf8 -Tail 50
 Get-Content -LiteralPath './server/logs/netease-api.log' -Encoding utf8 -Tail 50
 ```
 
-端口成功只表示本地 API 可连接，并不证明音乐平台登录或音源正常。搜索正常但播放失败时，重新保存有效 Cookie、换歌曲测试，并查看主服务日志中的原因。
+端口成功只表示本地 API 可连接，并不证明音乐平台登录或音源正常。桌面版内部 API 端口可能因占用而自动改变，应使用首页显示的实际端口；需要重启两个音乐 API 时，使用首页的 **重启全部服务**，管理台的“重启服务”只重启主服务。搜索正常但播放失败时，重新登录或保存有效 Cookie、换歌曲测试，并查看系统日志中的原因。
 
 ### Cookie 已保存，歌曲仍被跳过
 
@@ -384,13 +431,17 @@ Get-Content -LiteralPath './server/logs/netease-api.log' -Encoding utf8 -Tail 50
 
 先用少量不同歌曲测试，根据日志区分单曲不可用和整个渠道异常。QQ 音乐“已配置”不是有效登录保证。
 
+### 歌曲播放失败，提示 HTTP 502 并自动跳过
+
+表示获取音源的 API 请求失败，可能与上游接口或网络有关，不能仅凭这一条日志判断 Cookie 已失效。v1.0.16 当前会直接跳过失败歌曲，不会自动重试该次请求。稍后重新点入同一首歌，并用其他歌曲判断是偶发故障还是整个平台异常；持续失败时检查网络、登录状态及系统日志。
+
 ### 点歌归属或限额异常
 
 检查是否从不同网络访问，或多人共用代理 IP。相同 IP 的身份会合并；管理员可在用户名单和队列中核对。
 
 ### 静默运行如何查看日志
 
-启动脚本的输出在 `server/logs/main-server.log`、`qqmusic-api.log`、`netease-api.log`。管理台也可查看系统日志。分享前遮盖账号凭据和个人信息。
+桌面版可从首页 **日志目录**查看 `%APPDATA%/JukeboxDesktop/logs/desktop.log` 中的服务状态；管理台查看播放、点歌和错误日志，对应用户数据目录内的 `server/logs/system.log`。源码版启动脚本的输出在 `server/logs/main-server.log`、`qqmusic-api.log`、`netease-api.log`。分享前遮盖账号凭据和个人信息。
 
 ## 配置项参考
 
@@ -405,6 +456,7 @@ Get-Content -LiteralPath './server/logs/netease-api.log' -Encoding utf8 -Tail 50
 | `neteaseCookie` | 空字符串 | 网易云 Cookie |
 | `mpvPath` | `mpv` | 播放器路径或 PATH 中的命令名 |
 | `volume` | `100` | 初始音量，0–100 |
+| `loudnessNormalization` | `true` | 双平台自动响度均衡，`false` 可关闭；重启主服务生效 |
 | `audioDevice` | 空字符串 | 初始输出设备，空值使用系统默认 |
 | `playlistId` | `3778678` | 默认网易云热歌榜，未配置或 0 时使用此榜 |
 | `qqPlaylistId` | `0` | QQ 自选歌单，0 表示使用默认 QQ 热歌榜 |
@@ -419,4 +471,29 @@ Get-Content -LiteralPath './server/logs/netease-api.log' -Encoding utf8 -Tail 50
 | `searchCacheMs` | `30000` | 搜索缓存时间，毫秒 |
 
 本项目依赖第三方音乐服务接口。使用歌曲时请遵守相应平台的服务条款及歌曲授权要求。
+
+## 使用的开源项目
+
+感谢以下开源项目及其贡献者。本表列出当前版本的主要组件，包含运行、播放、网页界面和构建工具：
+
+| 项目 | 在点歌机中的用途 | 项目链接 |
+| --- | --- | --- |
+| Node.js | 服务端 JavaScript 运行环境；桌面版由 Electron 提供内置运行环境 | [nodejs/node](https://github.com/nodejs/node) |
+| Electron | Windows 桌面窗口、托盘、内嵌网页与本地服务管理 | [electron/electron](https://github.com/electron/electron) |
+| NeteaseCloudMusicApi | 网易云音乐搜索、歌单、推荐及音源接口；当前依赖包版本为 4.32.0 | [npm 发布页面](https://www.npmjs.com/package/NeteaseCloudMusicApi) |
+| QQMusicApi | QQ 音乐接口；本仓库在上游代码基础上适配登录续期、搜索和本地数据目录 | [jsososo/QQMusicApi](https://github.com/jsososo/QQMusicApi) |
+| mpv | 实际音频播放、输出设备选择和播放控制 | [mpv-player/mpv](https://github.com/mpv-player/mpv) |
+| FFmpeg / libavfilter | mpv 内使用的音频解码与处理，包括 `loudnorm` 响度均衡 | [FFmpeg/FFmpeg](https://github.com/FFmpeg/FFmpeg) |
+| mpv-winbuild-cmake | Windows 内置 mpv 的构建与发布来源 | [shinchiro/mpv-winbuild-cmake](https://github.com/shinchiro/mpv-winbuild-cmake) |
+| Express | 主服务与音乐 API 的 HTTP 路由和静态页面服务 | [expressjs/express](https://github.com/expressjs/express) |
+| Socket.IO / socket.io-client | 队列、播放状态与用户操作的实时同步 | [Socket.IO](https://socket.io/) |
+| Vue | 点歌台和管理台的网页界面 | [vuejs/core](https://github.com/vuejs/core) |
+| Vite / plugin-vue | 网页开发与生产构建 | [vitejs/vite](https://github.com/vitejs/vite) · [vitejs/vite-plugin-vue](https://github.com/vitejs/vite-plugin-vue) |
+| Tailwind CSS / @tailwindcss/vite | 网页样式与样式构建 | [tailwindlabs/tailwindcss](https://github.com/tailwindlabs/tailwindcss) |
+| electron-builder / electron-updater | Windows 安装包制作及 GitHub 在线更新 | [electron-userland/electron-builder](https://github.com/electron-userland/electron-builder) |
+| NSIS | Windows 安装程序及自动安装流程 | [NSIS 官网](https://nsis.sourceforge.io/) |
+
+其他直接依赖和各组件版本可查看 [server/package.json](server/package.json)、[web/package.json](web/package.json)、[desktop/package.json](desktop/package.json)、[QQMusicApi/package.json](QQMusicApi/package.json) 和 [netease-api/package.json](netease-api/package.json)；锁定的完整依赖见各目录的 `package-lock.json`。
+
+播放器对应的上游源码版本和构建来源记录在 [desktop/mpv-source.json](desktop/mpv-source.json)。安装包中的第三方许可见安装目录的 `resources/licenses` 及 Electron 自带的许可文件；GitHub Release 同时提供 `ThirdParty-Licenses.zip` 和 `mpv-source.json`。各组件仍适用各自的开源许可。
 
