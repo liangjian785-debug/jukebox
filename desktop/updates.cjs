@@ -4,7 +4,8 @@ function createUpdates(updater, version, changed) {
   let state = { status: 'idle', version, message: '从 GitHub Releases 检查更新。', notes: '' };
   const set = values => { state = { ...state, ...values }; changed(); };
   updater.autoDownload = false;
-  updater.autoInstallOnAppQuit = true;
+  updater.autoInstallOnAppQuit = false;
+  updater.autoRunAppAfterInstall = true;
   updater.allowPrerelease = false;
   updater.allowDowngrade = false;
   updater.on('checking-for-update', () => set({ status: 'checking', message: '正在检查更新…' }));
@@ -12,10 +13,15 @@ function createUpdates(updater, version, changed) {
     notes: String(Array.isArray(info.releaseNotes) ? info.releaseNotes.map(note => note.note).join('\n') : info.releaseNotes || '').replace(/<[^>]*>/g, '') }));
   updater.on('update-not-available', () => set({ status: 'current', message: '当前已是最新版本。', notes: '', latest: '' }));
   updater.on('download-progress', progress => set({ status: 'downloading', message: '正在下载：' + Math.floor(progress.percent) + '%' }));
-  updater.on('update-downloaded', () => set({ status: 'ready', message: '更新已下载并校验。请自行退出软件，退出后自动安装新版。' }));
+  updater.on('update-downloaded', () => set({ status: 'ready', message: '更新已下载并校验。请自行退出软件，安装完成后自动启动新版。' }));
   updater.on('error', () => set({ status: 'error', message: '更新失败，请检查网络或稍后重试。也可从 GitHub 下载新版安装包。' }));
   return {
     snapshot: () => state,
+    installOnExit() {
+      if (state.status !== 'ready') return;
+      set({ status: 'installing', message: '正在安装更新，完成后自动启动…' });
+      updater.quitAndInstall(true, true);
+    },
     async check() {
       if (['checking', 'downloading', 'ready'].includes(state.status)) return;
       set({ status: 'checking', message: '正在检查更新…' });

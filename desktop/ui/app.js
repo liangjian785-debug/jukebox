@@ -1,5 +1,6 @@
 const $ = id => document.getElementById(id);
 function update(state) {
+  document.body.dataset.service = state.state;
   const upgrade = state.update;
   if (upgrade) {
     $('update-version').textContent = '当前版本：' + upgrade.version;

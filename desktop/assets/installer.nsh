@@ -1,6 +1,15 @@
 !include nsDialogs.nsh
 !include FileFunc.nsh
 
+; Older clients install silently without --force-run. Relaunch those updates too.
+!macro customInstall
+  ${If} ${isUpdated}
+  ${AndIf} ${Silent}
+  ${AndIfNot} ${isForceRun}
+    ${StdUtils.ExecShellAsUser} $0 "$launchLink" "open" "--updated"
+  ${EndIf}
+!macroend
+
 !macro customPageAfterChangeDir
   Var JukeboxDirectoryInput
   Page custom JukeboxDirectoryPage JukeboxDirectoryLeave

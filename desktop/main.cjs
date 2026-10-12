@@ -190,7 +190,7 @@ async function run(operation) {
 async function quit() {
   if (exiting) return;
   exiting = true;
-  try { loginCapture?.stop(); await manager?.stop(); musicView?.webContents.close(); loginView?.webContents.close(); tray?.destroy(); allowExit = true; app.quit(); }
+  try { loginCapture?.stop(); await manager?.stop(); musicView?.webContents.close(); loginView?.webContents.close(); tray?.destroy(); allowExit = true; updates?.installOnExit(); app.quit(); }
   catch (error) { exiting = false; manager.error = error.message; manager.changed('failed'); showStatus(); }
 }
 app.on('before-quit', event => { if (!allowExit) { event.preventDefault(); quit(); } });

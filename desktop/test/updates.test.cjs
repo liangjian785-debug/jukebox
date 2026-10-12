@@ -4,16 +4,16 @@ const assert = require('node:assert/strict');
 const {EventEmitter} = require('events');
 const {createUpdates} = require('../updates.cjs');
 function fixture() {
- const updater=new EventEmitter();let checks=0,downloads=0;
+ const updater=new EventEmitter();let checks=0,downloads=0;const installs=[];
  updater.checkForUpdates=async()=>{checks++;};
  updater.downloadUpdate=async()=>{downloads++;};
- updater.quitAndInstall=()=>{throw Error('must never force quit');};
+ updater.quitAndInstall=(...args)=>installs.push(args);
  const updates=createUpdates(updater,'1.0.11',()=>{});
- return {updater,updates,checks:()=>checks,downloads:()=>downloads};
+ return {updater,updates,installs,checks:()=>checks,downloads:()=>downloads};
 }
 test('checks do not auto-download, downgrade or force quit',async()=>{
- const {updater,updates,checks,downloads}=fixture();
- assert.equal(updater.autoDownload,false);assert.equal(updater.allowDowngrade,false);assert.equal(updater.autoInstallOnAppQuit,true);
+ const {updater,updates,installs,checks,downloads}=fixture();
+ assert.equal(updater.autoDownload,false);assert.equal(updater.allowDowngrade,false);assert.equal(updater.autoInstallOnAppQuit,false);
  await updates.check();await updates.check();assert.equal(checks(),1);
  updater.emit('update-available',{version:'1.0.12',releaseNotes:'<b>修复</b>'});
  assert.equal(downloads(),0);assert.equal(updates.snapshot().notes,'修复');
@@ -21,6 +21,8 @@ test('checks do not auto-download, downgrade or force quit',async()=>{
  updater.emit('download-progress',{percent:42.9});assert.match(updates.snapshot().message,/42%/);
  updater.emit('update-downloaded');assert.equal(updates.snapshot().status,'ready');
  await updates.check();assert.equal(checks(),1);
+ assert.equal(installs.length,0);
+ updates.installOnExit();updates.installOnExit();assert.deepEqual(installs,[[true,true]]);
 });
 test('failed check and failed verification leave update uninstalled and permit retry',async()=>{
  const {updater,updates}=fixture();updater.checkForUpdates=async()=>{throw Error('missing metadata');};
