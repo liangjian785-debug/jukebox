@@ -41,7 +41,7 @@ module.exports = {
     }
 
     // 统一走新版 musicu.fcg 搜索（老接口 c.y.qq.com/soso/... 已被 QQ 弃用返回 500）
-    // search_type 与旧 t 参数一致：0 单曲 / 2 歌单 / 7 歌词 / 8 专辑 / 9 歌手 / 12 MV
+    // 对外沿用旧 t 参数；新版桌面接口的歌单 search_type 改为 3。
     const body = {
       req_0: {
         module: 'music.search.SearchCgiService',
@@ -50,7 +50,7 @@ module.exports = {
           query: key,
           num_per_page: Number(pageSize),
           page_num: Number(pageNo),
-          search_type: Number(t),
+          search_type: Number(t) === 2 ? 3 : Number(t), // 新版桌面接口歌单类型为3；对外保留t=2
           grp: 1,
         },
       },
@@ -65,13 +65,16 @@ module.exports = {
       },
     }).catch(() => null);
 
+    if (res.headersSent) return result;
+
     if (Number(raw)) {
       return res.send(result || { result: 400, errMsg: '搜索失败' });
     }
 
     // 防御：QQ 接口异常时 result 可能为空/无 data，绝不抛错（避免进程崩溃）
     const section = result && result.req_0 && result.req_0.data && result.req_0.data.body;
-    const searchResult = (section && section.song) || { list: [], totalnum: 0 };
+    if (!section || (result.req_0 && result.req_0.code)) return res.send({ result: 400, errMsg: '搜索服务暂不可用' });
+    const searchResult = section[type] || (t == 2 && section.songlist) || { list: [], totalnum: 0 };
     const {list = [], totalnum = 0} = searchResult;
     const keyword = key;
 

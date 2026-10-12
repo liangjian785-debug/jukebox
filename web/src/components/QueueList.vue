@@ -43,21 +43,22 @@ const infoLine = computed(() => {
 </script>
 
 <template>
-  <div>
+  <div class="queue-card">
     <div class="mb-2 flex items-center justify-between px-1">
-      <h3 class="text-sm font-semibold text-slate-300">
-        插播队列 <span class="text-slate-500">({{ queue.length }}/{{ max }})</span>
-      </h3>
-      <span class="max-w-[50%] truncate text-xs text-slate-500">
+      <div class="section-title">
+        <span class="section-icon queue-icon" aria-hidden="true">≋</span>
+        <div><p class="section-kicker">UP NEXT</p><h3>插播队列 <span class="queue-count">{{ queue.length }}/{{ max }}</span></h3></div>
+      </div>
+      <span class="queue-info max-w-[50%] truncate text-xs">
         {{ infoLine }}
       </span>
     </div>
 
-    <ul v-if="queue.length" class="divide-y divide-slate-800 rounded-xl bg-slate-800/50">
-      <li v-for="(item, i) in queue" :key="item.songId + '-' + i" class="flex items-center gap-3 px-3 py-2.5">
+    <ul v-if="queue.length" class="queue-list divide-y rounded-xl">
+      <li v-for="(item, i) in queue" :key="item.songId + '-' + i" class="queue-item flex items-center gap-3 px-3 py-2.5">
         <span class="w-5 shrink-0 text-center text-xs text-slate-500">{{ i + 1 }}</span>
-        <img v-if="item.cover" :src="item.cover" class="h-9 w-9 shrink-0 rounded-lg object-cover" alt="" />
-        <div v-else class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-700 text-base">🎵</div>
+        <img v-if="item.cover" :src="item.cover" class="song-cover h-9 w-9 shrink-0 rounded-lg object-cover" alt="" />
+        <div v-else class="song-cover flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-base">♫</div>
         <div class="min-w-0 flex-1">
           <p class="truncate text-sm text-white">
             <span
@@ -76,7 +77,7 @@ const infoLine = computed(() => {
         </div>
         <!-- 顶歌按钮 -->
         <button
-          class="shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-medium transition"
+          class="boost-button shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-medium transition"
           :class="
             boosted(item)
               ? 'cursor-not-allowed bg-amber-500/20 text-amber-400'
@@ -90,15 +91,15 @@ const infoLine = computed(() => {
         </button>
         <button
           v-if="isMine(item)"
-          class="shrink-0 rounded-lg bg-red-600/80 px-2.5 py-1.5 text-xs font-medium text-white active:bg-red-500"
+          class="remove-button shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-medium active:bg-red-500"
           @click="$emit('remove', item.platform || 'netease', item.songId)"
         >
           删除
         </button>
       </li>
     </ul>
-    <p v-else class="rounded-xl bg-slate-800/30 py-4 text-center text-xs text-slate-600">
-      队列空 — 搜一首歌点起来吧
+    <p v-else class="empty-queue rounded-xl py-4 text-center text-xs">
+      <span aria-hidden="true">✦</span> 队列空 — 搜一首歌点起来吧
     </p>
   </div>
 </template>

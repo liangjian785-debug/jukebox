@@ -132,21 +132,27 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="mx-auto flex h-dvh max-w-[1920px] gap-3 p-3">
+  <div class="jukebox-shell">
     <!-- 左侧：榜单板块（宽屏容纳3列榜单不拥挤） -->
-    <aside class="w-[34rem] shrink-0 overflow-y-auto rounded-2xl bg-slate-900/60 p-3">
+    <aside class="chart-panel">
       <ChartSidebar :channels="state.channels" @queue="doQueue" />
     </aside>
 
     <!-- 右侧：主功能区 -->
-    <main class="flex min-w-0 flex-1 flex-col gap-3">
+    <main class="main-panel">
       <!-- 顶部栏 -->
-      <header class="flex items-center justify-between px-1 pt-1">
-        <h1 class="text-lg font-bold text-white">🎵 局域网点歌机</h1>
+      <header class="app-header">
+        <div class="header-brand">
+          <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+          <div>
+            <p class="header-eyebrow">MUSIC, TOGETHER</p>
+            <h1>局域网点歌机</h1>
+          </div>
+        </div>
         <div class="flex items-center gap-2">
           <!-- 用户名组件：显示当前用户，点击修改 -->
           <button
-            class="max-w-[10rem] truncate rounded-lg bg-slate-800 px-3 py-2 text-sm text-slate-300 hover:bg-slate-700"
+            class="user-badge"
             :title="'当前用户：' + myNickname"
             @click="doChangeNickname"
           >
@@ -181,10 +187,10 @@ onMounted(async () => {
     </main>
 
     <div v-if="nicknameOpen" class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4" @keydown.esc="nicknameOpen = false">
-      <form class="w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 p-5" role="dialog" aria-modal="true" aria-labelledby="nickname-title" @submit.prevent="saveNickname">
+      <form class="nickname-dialog" role="dialog" aria-modal="true" aria-labelledby="nickname-title" @submit.prevent="saveNickname">
         <h2 id="nickname-title" class="mb-4 font-semibold text-white">修改昵称</h2>
         <label for="nickname-input" class="text-sm text-slate-300">昵称（最多 12 个字符）</label>
-        <input id="nickname-input" v-model="nicknameDraft" maxlength="12" autofocus class="mt-2 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-white" />
+        <input id="nickname-input" v-model="nicknameDraft" maxlength="12" autofocus class="nickname-input" />
         <div class="mt-4 flex justify-end gap-2">
           <button type="button" class="rounded-lg bg-slate-700 px-4 py-2 text-white" :disabled="nicknameSaving" @click="nicknameOpen = false">取消</button>
           <button class="rounded-lg bg-indigo-600 px-4 py-2 text-white" :disabled="nicknameSaving">{{ nicknameSaving ? '保存中…' : '保存' }}</button>
@@ -196,7 +202,7 @@ onMounted(async () => {
     <Transition name="toast-enter">
       <div
         v-if="toast"
-        class="toast-enter fixed bottom-24 left-1/2 z-50 -translate-x-1/2 rounded-full bg-slate-700 px-4 py-2 text-sm text-white shadow-xl"
+          class="toast-enter toast-message fixed bottom-8 left-1/2 z-50 -translate-x-1/2 rounded-full px-4 py-2 text-sm shadow-xl"
       >
         {{ toast }}
       </div>

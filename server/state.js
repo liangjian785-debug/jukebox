@@ -2,7 +2,7 @@
  * 全局状态单例：双源模型
  *   - userQueue   插播区（用户点的歌，FIFO，先点先播）
  *   - playlist    默认歌单（背景音乐，列表循环）
- *   - playSource  'playlist'（默认歌单）| 'fm'（心动FM 私人推荐）
+ *   - playSource  'playlist'（网易云歌单）| 'fm'（网易云心动FM）| 'qq-playlist' | 'qq-radar'
  * 取歌规则：插播区非空优先播插播区；空了按当前播放源取下一首。
  */
 const config = require('./config');
@@ -27,12 +27,14 @@ class State {
     this.playlist = {
       id: 0,
       name: '',
+      platform: 'netease',
       songs: [], // queueItem[]
       order: [], // 随机播放顺序（Fisher-Yates 洗牌；播完一轮重新洗牌）
       index: -1, // 当前播到第几首（-1 = 未开始）
     };
     this.playSource = config.fmMode ? 'fm' : 'playlist'; // 播放源
     this.fmQueue = []; // 心动FM 已拉取的推荐歌曲缓存
+    this.qqRadarQueue = []; // QQ 私人雷达已拉取的推荐歌曲缓存
     this.channels = channels.load(); // 平台渠道开关 {netease, qq}
     this.skipVotes = new Map(); // 当前歌曲的跳过投票：clientId -> nickname
     this.skipRequired = config.skipRequired; // 投票跳过所需票数
@@ -78,7 +80,7 @@ class State {
     if (!data) return;
     if (Array.isArray(data.userQueue)) this.userQueue = data.userQueue;
     if (data.current) this.current = data.current;
-    if (data.playSource === 'fm' || data.playSource === 'playlist') this.playSource = data.playSource;
+    if (['playlist', 'fm', 'qq-playlist', 'qq-radar'].includes(data.playSource)) this.playSource = data.playSource;
     users.restore(data.users);
     // 统一历史昵称 + 旧数据补 platform（多平台改造前点的歌默认 netease）
     for (const s of this.userQueue) {
@@ -93,6 +95,7 @@ class State {
     return {
       id: this.playlist.id,
       name: this.playlist.name,
+      platform: this.playlist.platform || 'netease',
       count: this.playlist.songs.length,
       index: this.playlist.index,
     };
@@ -256,8 +259,8 @@ class State {
 
   /**
    * 取下一首（唯一规则，所有入口共用）
-   * @returns {{item?: object, needFm?: boolean, empty?: boolean}}
-   *   item 有歌可播；needFm 播放源为 FM 且缓存空，需要异步拉取后重试；empty 无歌可播
+   * @returns {{item?: object, needFm?: boolean, needQqRadar?: boolean, empty?: boolean}}
+   *   item 有歌可播；needFm/needQqRadar 表示推荐队列为空，需要异步拉取后重试
    */
   nextSong() {
     if (this.userQueue.length > 0) {
@@ -273,6 +276,14 @@ class State {
       }
       return { needFm: true };
     }
+    if (this.playSource === 'qq-radar') {
+      if (this.qqRadarQueue.length > 0) {
+        const item = this.qqRadarQueue.shift();
+        this.bump();
+        return { item };
+      }
+      return { needQqRadar: true };
+    }
     if (this.playlist.songs.length > 0) {
       // 随机播放：本轮洗牌播完（order 空）后重新洗牌
       if (this.playlist.order.length === 0) {
@@ -287,14 +298,14 @@ class State {
   }
 
   /** 设置默认歌单 */
-  setPlaylist(id, name, songs) {
-    this.playlist = { id, name, songs, order: [], index: -1 };
+  setPlaylist(id, name, songs, platform = 'netease') {
+    this.playlist = { id, name, platform: platform === 'qq' ? 'qq' : 'netease', songs, order: [], index: -1 };
     this.bump();
   }
 
-  /** 切换播放源：'playlist' | 'fm' */
+  /** 切换播放源：'playlist' | 'fm' | 'qq-playlist' | 'qq-radar' */
   setPlaySource(mode) {
-    this.playSource = mode === 'fm' ? 'fm' : 'playlist';
+    this.playSource = ['playlist', 'fm', 'qq-playlist', 'qq-radar'].includes(mode) ? mode : 'playlist';
     this.bump();
   }
 
@@ -305,6 +316,18 @@ class State {
       if (s && s.songId && !seen.has(s.songId)) {
         this.fmQueue.push(s);
         seen.add(s.songId);
+      }
+    }
+    this.bump();
+  }
+
+  /** 填充 QQ 私人雷达推荐歌曲缓存。 */
+  fillQqRadar(songs) {
+    const seen = new Set(this.qqRadarQueue.map((s) => String(s.songId)));
+    for (const song of songs) {
+      if (song && song.songId && !seen.has(String(song.songId))) {
+        this.qqRadarQueue.push({ ...song, platform: 'qq' });
+        seen.add(String(song.songId));
       }
     }
     this.bump();

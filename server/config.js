@@ -9,6 +9,8 @@ const defaults = {
   qqApiBase: 'http://127.0.0.1:3400',   // QQMusicApi 独立进程地址（需先部署QQMusicApi）
   neteaseCookie: '',                   // 个人网易云账号 Cookie（可选，建议 VIP）
   playlistId: 3778678,                 // 默认网易云热歌榜
+  qqPlaylistId: 0,                     // QQ 背景歌单；0 使用默认 QQ 热歌榜
+  qqChartId: 26,                       // 默认 QQ 热歌榜（QQMusicApi /top）
   maxUserQueue: 300,                   // 插播区上限
   maxPerUser: 10,                      // 每人在插播区最多点几首
   searchCacheMs: 30000,                // 搜索缓存时长

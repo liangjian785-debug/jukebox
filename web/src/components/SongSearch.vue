@@ -63,15 +63,18 @@ function fmt(sec) {
 </script>
 
 <template>
-  <div class="rounded-2xl bg-slate-800/40 p-3">
+  <div class="search-card">
     <div class="mb-2 flex items-center justify-between px-1">
-      <h2 class="text-sm font-semibold text-slate-300">🔍 点歌</h2>
+      <div class="section-title">
+        <span class="section-icon" aria-hidden="true">⌕</span>
+        <div><p class="section-kicker">FIND YOUR NEXT SONG</p><h2>点歌</h2></div>
+      </div>
       <!-- 平台切换 -->
-      <div class="flex gap-1 rounded-lg bg-slate-800 p-0.5">
+      <div class="platform-switch flex gap-1 rounded-lg p-0.5">
         <button
           v-for="p in PLATFORMS"
           :key="p.id"
-          class="rounded-md px-2.5 py-1 text-xs font-medium transition"
+          class="platform-button rounded-md px-2.5 py-1 text-xs font-medium transition"
           :class="
             !enabled(p.id)
               ? 'cursor-not-allowed bg-slate-800 text-slate-600 line-through'
@@ -92,7 +95,7 @@ function fmt(sec) {
         v-model="keyword"
         type="search"
         :placeholder="'搜索 ' + (platform === 'qq' ? 'QQ音乐' : '网易云') + ' 歌曲 / 歌手…'"
-        class="w-full rounded-xl bg-slate-800 px-4 py-3 text-base text-white placeholder-slate-500 outline-none ring-slate-600 focus:ring-2"
+        class="search-input w-full rounded-xl px-4 py-3 text-base outline-none focus:ring-2"
         @input="onInput"
       />
       <span v-if="searching" class="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-slate-500">
@@ -102,10 +105,10 @@ function fmt(sec) {
 
     <p v-if="error" class="mt-2 text-xs text-red-400">{{ error }}</p>
 
-    <ul v-if="results.length" class="mt-2 max-h-[30vh] divide-y divide-slate-800 overflow-y-auto rounded-xl bg-slate-800/50">
-      <li v-for="s in results" :key="s.platform + '-' + s.songId" class="flex items-center gap-3 px-3 py-2.5">
-        <img v-if="s.cover" :src="s.cover" class="h-10 w-10 shrink-0 rounded-lg object-cover" alt="" />
-        <div v-else class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-700 text-lg">🎵</div>
+    <ul v-if="results.length" class="search-results mt-2 max-h-[30vh] divide-y overflow-y-auto rounded-xl">
+      <li v-for="s in results" :key="s.platform + '-' + s.songId" class="song-result flex items-center gap-3 px-3 py-2.5">
+        <img v-if="s.cover" :src="s.cover" class="song-cover h-10 w-10 shrink-0 rounded-lg object-cover" alt="" />
+        <div v-else class="song-cover flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-lg">♫</div>
         <div class="min-w-0 flex-1">
           <p class="truncate text-sm text-white">
             <span
@@ -119,7 +122,7 @@ function fmt(sec) {
           <p class="truncate text-xs text-slate-400">{{ s.artists.join(' / ') }} · {{ fmt(s.duration) }}</p>
         </div>
         <button
-          class="shrink-0 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white active:bg-emerald-500"
+          class="song-action shrink-0 rounded-lg px-3 py-2 text-sm font-medium active:bg-emerald-500"
           @click="$emit('queue', s)"
         >
           点歌

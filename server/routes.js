@@ -15,7 +15,7 @@ const logger = require('./logger');
 const channels = require('./channels');
 const config = require('./config');
 const scheduler = require('./scheduler');
-const { playlistId } = require('./playlist-input');
+const { playlistId, qqPlaylistId } = require('./playlist-input');
 
 /** 渠道是否开启 + 名称 */
 function channelOn(platform) {
@@ -36,11 +36,11 @@ const PRESETS_FILE = require('./paths').presetsPath;
 function loadPresets() {
   try {
     const arr = JSON.parse(fs.readFileSync(PRESETS_FILE, 'utf8'));
-    if (Array.isArray(arr)) return arr;
+    if (Array.isArray(arr)) return arr.map(p => ({...p, platform:p.platform === 'qq' ? 'qq' : 'netease'}));
   } catch (e) {
     /* 无文件或损坏 */
   }
-  return Array.isArray(config.presetPlaylists) ? config.presetPlaylists : [];
+  return Array.isArray(config.presetPlaylists) ? config.presetPlaylists.map(p => ({...p, platform:p.platform === 'qq' ? 'qq' : 'netease'})) : [];
 }
 function savePresets(presets) {
   try {
@@ -560,78 +560,72 @@ function createRouter(io, player, playNext, system) {
     res.json({ ok: true });
   });
 
-  /** POST /api/admin/playlist {playlistId} 运行时切换默认歌单（持久化，重启保持） */
-  router.post('/admin/playlist', adminAuth, async (req, res) => {
+  const platformOf = value => value === 'qq' ? 'qq' : 'netease';
+  const currentIds = () => ({netease:config.playlistId || 3778678, qq:config.qqPlaylistId || 0});
+  const loadPlaylist = (platform,id) => platform === 'qq'
+    ? (id ? qq.getPlaylist(id) : qq.getChart(config.qqChartId || 26,100).then(chart => ({id:0,name:chart.name || 'QQ热歌榜',songs:chart.songs}))) : netease.getPlaylistCached(id);
+  function persistPlaylist(platform,id) {
+    const cfgPath = require('./paths').configPath;
+    const key = platform === 'qq' ? 'qqPlaylistId' : 'playlistId';
+    let content = fs.existsSync(cfgPath) ? fs.readFileSync(cfgPath,'utf8') : 'module.exports = {};';
+    const pattern = new RegExp('((?:\\b' + key + '\\s*:|module\\.exports\\.' + key + '\\s*=)\\s*)\\d+', 'g');
+    if (pattern.test(content)) content = content.replace(pattern, (_,prefix) => prefix + id);
+    else content += `\nmodule.exports.${key} = ${id};\n`;
+    fs.writeFileSync(cfgPath, content);
+    config[key] = id;
+  }
+  router.post('/admin/playlist', adminAuth, async (req,res) => {
+    const platform = platformOf(req.body && req.body.platform);
     const id = Number(req.body && req.body.playlistId);
-    if (!id) return res.status(400).json({ error: 'playlistId 必填' });
+    if (!Number.isSafeInteger(id) || id < (platform === 'qq' ? 0 : 1)) return res.status(400).json({error:'歌单 ID 无效'});
     try {
-      const pl = await netease.getPlaylistCached(id);
-      state.setPlaylist(pl.id, pl.name, pl.songs);
-      config.playlistId = id; // 同步内存，重启后仍用此歌单
-      // 持久化到 config.local.js
-      const cfgPath = require('./paths').configPath;
-      try {
-        if (fs.existsSync(cfgPath)) {
-          let content = fs.readFileSync(cfgPath, 'utf8');
-          content = content.replace(/(playlistId:\s*)\d+/, `$1${id}`);
-          fs.writeFileSync(cfgPath, content);
-        }
-      } catch (e) {
-        /* ignore */
-      }
+      const pl = await loadPlaylist(platform,id);
+      persistPlaylist(platform,id);
+      state.setPlaylist(id,pl.name,pl.songs,platform);
+      state.setPlaySource(platform === 'qq' ? 'qq-playlist' : 'playlist');
       broadcast();
-      logger.log('action', `管理员切换歌单：${pl.name}（${pl.songs.length} 首）`, 'admin');
-      res.json({ ok: true, name: pl.name, count: pl.songs.length });
-    } catch (e) {
-      res.status(502).json({ error: '歌单加载失败: ' + e.message });
-    }
+      if (player.isPlaying() && !player.manualPaused) playNext();
+      logger.log('action', `管理员切换${platform === 'qq' ? 'QQ音乐' : '网易云'}歌单：${pl.name}（${pl.songs.length} 首）`, 'admin');
+      res.json({ok:true,name:pl.name,count:pl.songs.length,active:true,playSource:state.playSource});
+    } catch(e) {res.status(502).json({error:'歌单加载失败: '+e.message});}
   });
-
-  /** GET /api/admin/presets 预设歌单列表（presets.json 持久化，无则用 config 种子） */
-  router.get('/admin/presets', adminAuth, (req, res) => {
-    res.json({ presets: loadPresets(), current: config.playlistId || 0 });
+  router.get('/admin/presets',adminAuth,(req,res) => {
+    res.json({presets:loadPresets(),current:config.playlistId || 0,currentByPlatform:currentIds()});
   });
-
-  /** POST /api/admin/presets {playlistId} 添加预设歌单（自动获取歌单名） */
-  router.get('/admin/playlist-search', adminAuth, async (req, res) => {
+  router.get('/admin/playlist-search',adminAuth,async(req,res) => {
     const keyword = String(req.query.keyword || '').trim();
-    if (!keyword || keyword.length > 100) return res.status(400).json({ error: '请输入 1–100 个字符的歌单名称' });
-    try { res.json({ playlists: await netease.searchPlaylists(keyword) }); }
-    catch (e) { res.status(502).json({ error: '歌单搜索失败: ' + e.message }); }
+    const platform = platformOf(req.query.platform);
+    if (!keyword || keyword.length > 100) return res.status(400).json({error:'请输入 1–100 个字符的歌单名称'});
+    try {res.json({playlists:(await (platform === 'qq' ? qq : netease).searchPlaylists(keyword)).map(p => ({...p,platform}))});}
+    catch(e) {res.status(502).json({error:'歌单搜索失败: '+e.message});}
   });
-
-  router.post('/admin/presets', adminAuth, async (req, res) => {
+  router.post('/admin/presets',adminAuth,async(req,res) => {
+    const platform = platformOf(req.body && req.body.platform);
     let id;
-    try { id = await playlistId(req.body && req.body.playlistId); }
-    catch (e) { return res.status(400).json({ error: e.message }); }
+    try {id = await (platform === 'qq' ? qqPlaylistId : playlistId)(req.body && req.body.playlistId);}
+    catch(e) {return res.status(400).json({error:e.message});}
     try {
-      const pl = await netease.getPlaylistCached(id);
+      const pl = await loadPlaylist(platform,id);
       const presets = loadPresets();
-      if (!presets.some((p) => p.id === id)) {
-        presets.push({ id, name: pl.name || `歌单 ${id}` });
-        savePresets(presets);
+      if (!presets.some(p => Number(p.id) === id && p.platform === platform)) {
+        presets.push({id,name:pl.name || `歌单 ${id}`,platform}); savePresets(presets);
       }
-      res.json({ ok: true, name: pl.name, presets });
-    } catch (e) {
-      res.status(502).json({ error: '歌单加载失败: ' + e.message });
-    }
+      res.json({ok:true,name:pl.name,presets});
+    } catch(e) {res.status(502).json({error:'歌单加载失败: '+e.message});}
   });
-
-  /** DELETE /api/admin/presets/:playlistId 删除预设歌单（不影响当前播放歌单） */
-  router.delete('/admin/presets/:playlistId', adminAuth, (req, res) => {
-    const id = Number(req.params.playlistId);
-    let presets = loadPresets().filter((p) => p.id !== id);
-    savePresets(presets);
-    res.json({ ok: true, presets });
+  router.delete('/admin/presets/:playlistId',adminAuth,(req,res) => {
+    const id = Number(req.params.playlistId), platform = platformOf(req.query.platform);
+    const presets = loadPresets().filter(p => Number(p.id) !== id || p.platform !== platform);
+    savePresets(presets); res.json({ok:true,presets});
   });
-
-  /** GET /api/admin/playlist 当前默认歌单信息（含前 50 首） */
-  router.get('/admin/playlist', adminAuth, (req, res) => {
-    const pm = state.playlistMeta();
-    res.json({
-      meta: pm,
-      songs: state.playlist.songs.slice(0, 50),
-    });
+  router.get('/admin/playlist',adminAuth,async(req,res) => {
+    if (!req.query.platform) return res.json({meta:state.playlistMeta(),songs:state.playlist.songs.slice(0,50)});
+    const platform = platformOf(req.query.platform), id = currentIds()[platform];
+    if (state.playSource === (platform === 'qq' ? 'qq-playlist' : 'playlist') && Number(state.playlist.id) === id && state.playlist.platform === platform) return res.json({meta:state.playlistMeta(),songs:state.playlist.songs.slice(0,50)});
+    try {
+      const pl = await loadPlaylist(platform,id);
+      res.json({meta:{id,name:pl.name,platform,count:pl.songs.length,index:-1},songs:pl.songs.slice(0,50)});
+    } catch(e) {res.status(502).json({error:'歌单加载失败: '+e.message});}
   });
 
   /** GET /api/admin/audio-devices 查询 mpv 可用音频设备 */
@@ -669,7 +663,7 @@ function createRouter(io, player, playNext, system) {
 
   /** GET /api/admin/play-source 当前播放源 */
   router.get('/admin/play-source', adminAuth, (req, res) => {
-    res.json({ playSource: state.playSource });
+    res.json({ playSource: state.playSource, qqChartId: config.qqChartId || 26 });
   });
 
   /** GET /api/admin/users 用户名单（昵称/IP/活跃/队列数） */
@@ -699,23 +693,48 @@ function createRouter(io, player, playNext, system) {
 
   /** POST /api/admin/play-source {mode:'playlist'|'fm'} 切换播放源（运行时生效 + 持久化） */
   router.post('/admin/play-source', adminAuth, (req, res) => {
-    const mode = (req.body && req.body.mode) === 'fm' ? 'fm' : 'playlist';
-    state.setPlaySource(mode);
-    config.fmMode = mode === 'fm';
-    const cfgPath = require('./paths').configPath;
-    try {
-      if (fs.existsSync(cfgPath)) {
-        let content = fs.readFileSync(cfgPath, 'utf8');
-        content = content.replace(/(fmMode:\s*)(true|false)/, `$1${mode === 'fm'}`);
-        fs.writeFileSync(cfgPath, content);
+    const requested = req.body && req.body.mode;
+    const mode = ['playlist', 'fm', 'qq-playlist', 'qq-radar'].includes(requested) ? requested : 'playlist';
+    (async () => {
+      try {
+        if (mode === 'playlist') {
+          const pl = await netease.getPlaylistCached(config.playlistId || 3778678);
+          state.setPlaylist(pl.id, pl.name, pl.songs, 'netease');
+        } else if (mode === 'qq-playlist') {
+          const pl = await qq.getBackgroundPlaylist();
+          state.setPlaylist(pl.id, pl.name, pl.songs, 'qq');
+        } else if (mode === 'fm') {
+          state.setPlaylist(0, '网易云心动FM', [], 'netease');
+        } else {
+          state.setPlaylist(99, 'QQ音乐私人雷达', [], 'qq');
+        }
+
+        state.setPlaySource(mode);
+        config.fmMode = mode === 'fm'; // 兼容旧配置；实际播放源同时随状态快照保存
+        const cfgPath = require('./paths').configPath;
+        try {
+          if (fs.existsSync(cfgPath)) {
+            let content = fs.readFileSync(cfgPath, 'utf8');
+            content = content.replace(/(fmMode:\s*)(true|false)/, `$1${mode === 'fm'}`);
+            fs.writeFileSync(cfgPath, content);
+          }
+        } catch (e) {
+          // 持久化失败不阻塞运行时切换
+        }
+        broadcast();
+        if (player.isPlaying() && !player.manualPaused) playNext(); // 只在已有播放循环中立即切源；启动默认暂停时不自动开播
+        const labels = {
+          playlist: '网易云默认歌单',
+          fm: '网易云心动FM',
+          'qq-playlist': 'QQ音乐歌单',
+          'qq-radar': 'QQ音乐私人雷达',
+        };
+        logger.log('action', `管理员切换播放源：${labels[mode]}`, 'admin');
+        res.json({ ok: true, playSource: state.playSource, qqChartId: config.qqChartId || 26 });
+      } catch (e) {
+        res.status(502).json({ error: '播放源切换失败: ' + e.message });
       }
-    } catch (e) {
-      // 持久化失败不阻塞
-    }
-    broadcast();
-    playNext(); // 若当前无歌可播，立即按新播放源取歌
-    logger.log('action', `管理员切换播放源：${mode === 'fm' ? '心动FM' : '默认歌单'}`, 'admin');
-    res.json({ ok: true, playSource: state.playSource });
+    })();
   });
 
   return router;

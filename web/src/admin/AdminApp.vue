@@ -24,6 +24,10 @@ let statusRefreshId = 0;
 const queue = ref([]);
 const playlist = ref({ meta: { name: '', count: 0 }, songs: [] });
 const presets = ref([]);
+const playlistPlatform = ref('netease');
+const selectedPlaylistId = ref(0);
+let playlistRefreshId = 0;
+const playlistPlatformLabel = computed(() => playlistPlatform.value === 'qq' ? 'QQ音乐' : '网易云');
 const newPlaylistId = ref('');
 const playlistResults = ref([]);
 const playlistBusy = ref(false);
@@ -61,6 +65,12 @@ const WEEKDAYS = [
   { value: 6, label: '六' },
   { value: 0, label: '日' },
 ];
+const PLAY_SOURCE_INFO = {
+  playlist: { label: '网易云歌单', provider: '网易云' },
+  fm: { label: '心动 FM', provider: '网易云' },
+  'qq-playlist': { label: 'QQ歌单', provider: 'QQ音乐' },
+  'qq-radar': { label: 'QQ 私人雷达', provider: 'QQ音乐' },
+};
 let socket = null;
 
 function showToast(msg) {
@@ -278,25 +288,49 @@ const LEVEL_STYLE = {
 };
 
 async function refreshPresets() {
+  const platform = playlistPlatform.value;
+  const refreshId = ++playlistRefreshId;
   try {
-    const r = await adminGetPresets();
-    presets.value = r.presets || [];
-    playlist.value = { meta: { id: r.current, name: status.value?.playlistMeta?.name || '', count: status.value?.playlistMeta?.count || 0 }, songs: [] };
+    const [r, currentPlaylist] = await Promise.all([adminGetPresets(platform), adminGetPlaylist(platform)]);
+    if (refreshId !== playlistRefreshId || platform !== playlistPlatform.value) return;
+    presets.value = (r.presets || []).filter(p => (p.platform || 'netease') === platform);
+    selectedPlaylistId.value = r.currentByPlatform?.[platform] ?? (platform === 'netease' ? r.current : 0);
+    playlist.value = currentPlaylist;
   } catch (e) {
-    showToast(e.message);
+    if (refreshId === playlistRefreshId) showToast(e.message);
   }
+}
+
+function changePlaylistPlatform(platform) {
+  if (playlistBusy.value || platform === playlistPlatform.value) return;
+  playlistPlatform.value = platform;
+  presets.value = [];
+  playlist.value = { meta: { name: '', count: 0 }, songs: [] };
+  newPlaylistId.value = '';
+  playlistResults.value = [];
+  playlistSearched.value = false;
+  refreshPresets();
+}
+
+function presetSelected(id) {
+  return String(selectedPlaylistId.value) === String(id);
+}
+
+function presetActive(id) {
+  return presetSelected(id) && status.value?.playSource === (playlistPlatform.value === 'qq' ? 'qq-playlist' : 'playlist');
 }
 
 // 点击预设歌单：切换当前播放歌单
 async function doSwitchPreset(id) {
+  if (playlistBusy.value) return;
+  playlistBusy.value = true;
   try {
-    const r = await adminSetPlaylist(id);
+    const r = await adminSetPlaylist(id, playlistPlatform.value);
     showToast(`已切换：${r.name}（${r.count} 首）`);
-    refreshAll();
-    refreshPresets();
+    await Promise.all([refreshAll(), refreshPresets()]);
   } catch (e) {
     showToast(e.message);
-  }
+  } finally { playlistBusy.value = false; }
 }
 
 // 按名称搜索，或直接添加分享链接/ID
@@ -308,7 +342,7 @@ async function doFindPlaylist() {
   if (/^\d+$/.test(input) || /https?:\/\//i.test(input)) return doAddPreset(input);
   playlistBusy.value = true;
   try {
-    const result = await adminSearchPlaylists(input);
+    const result = await adminSearchPlaylists(input, playlistPlatform.value);
     playlistResults.value = result.playlists || [];
     playlistSearched.value = true;
   } catch (e) { showToast(e.message); }
@@ -319,7 +353,7 @@ async function doAddPreset(id) {
   if (playlistBusy.value) return;
   playlistBusy.value = true;
   try {
-    const r = await adminAddPreset(id);
+    const r = await adminAddPreset(id, playlistPlatform.value);
     showToast(`已添加：${r.name}`);
     newPlaylistId.value = '';
     playlistResults.value = [];
@@ -334,7 +368,7 @@ async function doAddPreset(id) {
 async function doRemovePreset(id) {
   if (!confirm('从预设列表删除这个歌单？（不影响当前播放）')) return;
   try {
-    await adminRemovePreset(id);
+    await adminRemovePreset(id, playlistPlatform.value);
     showToast('已删除预设');
     refreshPresets();
   } catch (e) {
@@ -379,7 +413,7 @@ async function doSetAudioDevice(device) {
 async function doSetPlaySource(mode) {
   try {
     const r = await adminSetPlaySource(mode);
-    showToast(mode === 'fm' ? '已切换：心动FM 推荐播放' : '已切换：默认歌单播放');
+    showToast(`已切换：${PLAY_SOURCE_INFO[mode]?.label || '默认歌单'}`);
     refreshAll();
   } catch (e) {
     showToast(e.message);
@@ -518,7 +552,7 @@ async function doSwitchPlaylist() {
   const id = Number(newPlaylistId.value);
   if (!id) return showToast('请输入歌单 ID');
   try {
-    const r = await adminSetPlaylist(id);
+    const r = await adminSetPlaylist(id, playlistPlatform.value);
     showToast(`已切换：${r.name}（${r.count} 首）`);
     newPlaylistId.value = '';
     refreshPresets();
@@ -528,6 +562,7 @@ async function doSwitchPlaylist() {
 }
 
 const playing = computed(() => status.value?.current);
+const activePlaySource = computed(() => PLAY_SOURCE_INFO[status.value?.playSource] || PLAY_SOURCE_INFO.playlist);
 
 onMounted(() => {
   removeLoginListener = window.musicLogin?.onResult(message => {
@@ -550,23 +585,30 @@ onUnmounted(() => { socket?.close(); removeLoginListener?.(); });
 </script>
 
 <template>
-  <div class="min-h-dvh bg-slate-950">
-    <div class="mx-auto max-w-[1600px] p-6">
+  <div class="admin-shell min-h-dvh">
+    <div class="admin-frame mx-auto max-w-[1440px] p-6">
       <!-- 页头 -->
-      <header class="mb-5 flex items-end justify-between border-b border-slate-800 pb-4">
-        <div>
-          <h1 class="text-2xl font-bold text-white">🎛 点歌机管理台</h1>
-          <p class="mt-1 text-sm text-slate-500">播放控制 · 队列管理 · 播放源 · 用户名单 · 系统</p>
+      <header class="admin-hero mb-6 flex items-center justify-between gap-8">
+        <div class="admin-hero-copy">
+          <p class="admin-eyebrow">● JUKEBOX · CONTROL ROOM</p>
+          <h1>让音乐<br>开始流动<span>。</span></h1>
+          <p class="admin-subtitle">播放控制、歌单与用户管理，都在这里轻松完成。</p>
+          <div class="admin-tags" aria-label="管理台功能">
+            <span>播放控制</span><span>双平台曲库</span><span>局域网共享</span>
+          </div>
+          <div class="admin-address">服务地址：<strong>{{ loc.protocol }}//{{ loc.host }}</strong></div>
         </div>
-        <div class="text-right text-sm text-slate-500">
-          <p>服务地址：{{ loc.protocol }}//{{ loc.host }}</p>
-          <p class="mt-0.5 text-xs text-slate-600">本页仅限管理员使用</p>
+        <div class="admin-hero-aside">
+          <div class="admin-orbit" aria-hidden="true"></div>
+          <div class="admin-record" aria-hidden="true"><div class="admin-record-label"><b>JUKEBOX</b><i></i><small>SIDE A · GOOD TIMES</small></div></div>
+          <span class="admin-spark" aria-hidden="true">✦</span>
+          <div class="admin-record-caption"><span class="admin-equalizer" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>本页仅限管理员使用</div>
         </div>
       </header>
 
       <!-- 登录层 -->
       <div v-if="!authed" class="mx-auto mt-24 max-w-sm">
-        <div class="rounded-xl border border-slate-700/50 bg-slate-800/60 p-6 shadow-xl">
+        <div class="admin-login-card rounded-xl border border-slate-700/50 bg-slate-800/60 p-6 shadow-xl">
           <h2 class="mb-1 text-lg font-semibold text-white">管理员登录</h2>
           <p class="mb-4 text-xs text-slate-500">输入管理口令进入控制台</p>
           <input
@@ -619,10 +661,8 @@ onUnmounted(() => { socket?.close(); removeLoginListener?.(); });
             <p class="mt-1 text-sm font-medium text-white">{{ queue.length }} 首</p>
           </div>
           <div class="rounded-xl border border-slate-700/50 bg-slate-800/60 p-3">
-            <p class="text-xs text-slate-500">播放源（网易云）</p>
-            <p class="mt-1 text-sm font-medium text-white">
-              {{ status?.playSource === 'fm' ? '✨ 心动FM' : '🎵 默认歌单' }}
-            </p>
+            <p class="text-xs text-slate-500">当前播放源（{{ activePlaySource.provider }}）</p>
+            <p class="mt-1 text-sm font-medium text-white">{{ activePlaySource.label }}</p>
           </div>
           <div class="rounded-xl border border-slate-700/50 bg-slate-800/60 p-3">
             <p class="text-xs text-slate-500">API 服务</p>
@@ -934,38 +974,63 @@ onUnmounted(() => { socket?.close(); removeLoginListener?.(); });
               <h2 class="mb-3 text-sm font-semibold text-slate-300">
                 播放源
                 <span class="ml-1 rounded bg-emerald-500/15 px-1.5 py-0.5 align-middle text-[10px] font-medium text-emerald-400">
-                  网易云
+                  {{ activePlaySource.provider }}
                 </span>
               </h2>
-              <div class="flex gap-2">
+              <div class="admin-source-options grid grid-cols-2 gap-2">
                 <button
-                  class="flex-1 rounded-lg py-2 text-sm font-medium transition"
+                  class="rounded-lg py-2 text-sm font-medium transition"
                   :class="status?.playSource === 'playlist' ? 'bg-indigo-600 text-white' : 'bg-slate-700 text-slate-400 hover:bg-slate-600'"
                   @click="doSetPlaySource('playlist')"
                 >
-                  🎵 默认歌单
+                  🎵 网易云歌单
                 </button>
                 <button
-                  class="flex-1 rounded-lg py-2 text-sm font-medium transition"
+                  class="rounded-lg py-2 text-sm font-medium transition"
                   :class="status?.playSource === 'fm' ? 'bg-indigo-600 text-white' : 'bg-slate-700 text-slate-400 hover:bg-slate-600'"
                   @click="doSetPlaySource('fm')"
                 >
-                  ✨ 心动FM
+                  ✨ 心动 FM
+                </button>
+                <button
+                  class="rounded-lg py-2 text-sm font-medium transition"
+                  :class="status?.playSource === 'qq-playlist' ? 'bg-indigo-600 text-white' : 'bg-slate-700 text-slate-400 hover:bg-slate-600'"
+                  @click="doSetPlaySource('qq-playlist')"
+                >
+                  🎧 QQ歌单
+                </button>
+                <button
+                  class="rounded-lg py-2 text-sm font-medium transition"
+                  :class="status?.playSource === 'qq-radar' ? 'bg-indigo-600 text-white' : 'bg-slate-700 text-slate-400 hover:bg-slate-600'"
+                  @click="doSetPlaySource('qq-radar')"
+                >
+                  📡 QQ 私人雷达
                 </button>
               </div>
-              <p class="mt-3 truncate text-xs text-slate-500" :title="playlist.meta.name">
-                当前：{{ playlist.meta.name || '未配置' }}（{{ playlist.meta.count }}首）
+              <p v-if="status?.playSource === 'playlist' || status?.playSource === 'qq-playlist'" class="mt-3 truncate text-xs text-slate-500" :title="status?.playlistMeta?.name">
+                当前歌单：{{ status?.playlistMeta?.name || '正在加载' }}（{{ status?.playlistMeta?.count || 0 }} 首）
+              </p>
+              <p v-else-if="status?.playSource === 'qq-radar'" class="mt-3 text-xs text-slate-500">
+                QQ 私人雷达需要先完成 QQ 音乐登录。
+              </p>
+              <p v-else class="mt-3 text-xs text-slate-500">
+                网易云心动 FM · 根据听歌偏好推荐
               </p>
             </div>
 
-            <!-- 歌单管理：预设歌单列表（点击切换，网易云歌单） -->
+            <!-- 歌单管理：按平台管理预设歌单 -->
             <div class="flex flex-1 flex-col rounded-xl border border-slate-700/50 bg-slate-800/60 p-4">
               <h2 class="mb-2 text-sm font-semibold text-slate-300">
                 歌单管理
                 <span class="ml-1 rounded bg-emerald-500/15 px-1.5 py-0.5 align-middle text-[10px] font-medium text-emerald-400">
-                  网易云歌单
+                  {{ playlistPlatformLabel }}歌单
                 </span>
               </h2>
+              <div class="mb-3 grid grid-cols-2 gap-2">
+                <button v-for="platform in ['netease', 'qq']" :key="platform" class="rounded-lg px-3 py-2 text-sm transition disabled:opacity-40" :class="playlistPlatform === platform ? 'bg-indigo-600 text-white' : 'bg-slate-700 text-slate-400 hover:bg-slate-600'" :disabled="playlistBusy" @click="changePlaylistPlatform(platform)">{{ platform === 'qq' ? '🐧 QQ音乐' : '🎵 网易云' }}</button>
+              </div>
+              <p class="mb-3 truncate text-xs text-slate-500" :title="playlist.meta.name">已选歌单：{{ playlist.meta.name || '正在加载' }}（{{ playlist.meta.count || 0 }} 首）</p>
+              <button v-if="playlistPlatform === 'qq'" class="mb-3 rounded-lg px-3 py-2 text-left text-sm transition" :class="presetSelected(0) ? 'bg-indigo-600/20 text-indigo-300 ring-1 ring-indigo-500' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'" :disabled="playlistBusy" @click="doSwitchPreset(0)">QQ 热歌榜 <span class="text-xs text-slate-500">默认</span><span v-if="presetActive(0)" class="ml-2 text-[10px] text-emerald-400">使用中</span><span v-else-if="presetSelected(0)" class="ml-2 text-[10px] text-emerald-400">已选择</span></button>
               <!-- 添加歌单 -->
               <div class="mb-3 flex gap-2">
                 <input
@@ -985,11 +1050,11 @@ onUnmounted(() => { socket?.close(); removeLoginListener?.(); });
                   {{ playlistBusy ? '处理中…' : '搜索 / 添加' }}
                 </button>
               </div>
-              <p class="mb-2 text-xs text-slate-500">按名称搜索后点击“添加”；也可粘贴网易云分享链接，无需查找 ID。</p>
+              <p class="mb-2 text-xs text-slate-500">按名称搜索后点击“添加”；也可粘贴{{ playlistPlatformLabel }}分享链接，无需查找 ID。</p>
               <ul v-if="playlistResults.length" class="mb-3 max-h-56 shrink-0 divide-y divide-slate-700 overflow-y-auto">
                 <li v-for="result in playlistResults" :key="result.id" class="flex items-center gap-2 py-2">
                   <div class="min-w-0 flex-1"><p class="truncate text-sm text-slate-200" :title="result.name">{{ result.name }}</p><p class="truncate text-xs text-slate-500">{{ result.creator }} · {{ result.count }} 首</p></div>
-                  <button class="shrink-0 rounded bg-indigo-600 px-2 py-1 text-xs text-white disabled:opacity-40" :disabled="playlistBusy || presets.some(p => p.id === result.id)" @click="doAddPreset(result.id)">{{ presets.some(p => p.id === result.id) ? '已添加' : '添加' }}</button>
+                  <button class="shrink-0 rounded bg-indigo-600 px-2 py-1 text-xs text-white disabled:opacity-40" :disabled="playlistBusy || presets.some(p => String(p.id) === String(result.id))" @click="doAddPreset(result.id)">{{ presets.some(p => String(p.id) === String(result.id)) ? '已添加' : '添加' }}</button>
                 </li>
               </ul>
               <p v-else-if="playlistSearched" class="mb-3 text-xs text-slate-500">没有找到歌单，可换个名称或粘贴分享链接。</p>
@@ -998,12 +1063,14 @@ onUnmounted(() => { socket?.close(); removeLoginListener?.(); });
                 <li v-for="p in presets" :key="p.id" class="flex items-center gap-2 py-2">
                   <button
                     class="min-w-0 flex-1 truncate rounded-lg px-2 py-1.5 text-left text-sm transition"
-                    :class="playlist.meta.id === p.id ? 'bg-indigo-600/20 text-indigo-300 ring-1 ring-indigo-500' : 'text-slate-200 hover:bg-slate-700/60'"
+                    :class="presetSelected(p.id) ? 'bg-indigo-600/20 text-indigo-300 ring-1 ring-indigo-500' : 'text-slate-200 hover:bg-slate-700/60'"
                     :title="'切换到此歌单：' + p.name"
+                    :disabled="playlistBusy"
                     @click="doSwitchPreset(p.id)"
                   >
                     {{ p.name }}
-                    <span v-if="playlist.meta.id === p.id" class="ml-1 text-[10px] text-emerald-400">使用中</span>
+                    <span v-if="presetActive(p.id)" class="ml-1 text-[10px] text-emerald-400">使用中</span>
+                    <span v-else-if="presetSelected(p.id)" class="ml-1 text-[10px] text-emerald-400">已选择</span>
                   </button>
                   <button
                     class="shrink-0 rounded-md bg-slate-700 px-2 py-1 text-xs text-slate-400 hover:bg-red-600/70 hover:text-white"
@@ -1121,6 +1188,7 @@ onUnmounted(() => { socket?.close(); removeLoginListener?.(); });
         <!-- 用户名单（全宽表格） -->
         <div class="mt-4 rounded-xl border border-slate-700/50 bg-slate-800/60 p-4">
           <h2 class="mb-3 text-sm font-semibold text-slate-300">用户名单（{{ users.length }}）</h2>
+          <div class="admin-table-wrap">
           <table class="w-full text-left text-sm">
             <thead>
               <tr class="border-b border-slate-700 text-xs text-slate-500">
@@ -1150,6 +1218,7 @@ onUnmounted(() => { socket?.close(); removeLoginListener?.(); });
               </tr>
             </tbody>
           </table>
+          </div>
           <p v-if="!users.length" class="py-6 text-center text-sm text-slate-600">暂无用户记录</p>
         </div>
 
@@ -1188,3 +1257,120 @@ onUnmounted(() => { socket?.close(); removeLoginListener?.(); });
     </div>
   </div>
 </template>
+
+<style scoped>
+:global(html),
+:global(body),
+:global(#app) { height: auto; min-height: 100%; }
+:global(body) { overflow-x: hidden; overflow-y: auto; }
+
+.admin-shell {
+  --admin-bg: #101a18;
+  --admin-panel: #1a2b24;
+  --admin-panel-deep: #14211b;
+  --admin-mint: #9ae6c5;
+  --admin-gold: #edc68a;
+  --admin-muted: #9eb5ac;
+  --admin-line: #30463d;
+  color: #e8f1ee;
+  background:
+    radial-gradient(ellipse at 84% 8%, #34534225, transparent 38rem),
+    radial-gradient(ellipse at 10% 45%, #263f3222, transparent 36rem),
+    var(--admin-bg);
+  font-family: "Microsoft YaHei", system-ui, sans-serif;
+}
+
+.admin-frame { max-width: 1440px; padding: 34px clamp(18px, 4vw, 56px) 48px; }
+.admin-hero { min-height: 238px; position: relative; overflow: hidden; }
+.admin-eyebrow { margin: 0; color: #92b5a5; font-size: 10px; font-weight: 600; letter-spacing: 2px; }
+.admin-hero h1 { margin: 14px 0 12px; color: #e8f1ee; font-size: clamp(32px, 4vw, 46px); font-weight: 600; line-height: 1.2; letter-spacing: 1px; }
+.admin-hero h1 span { color: var(--admin-gold); }
+.admin-subtitle { margin: 0; color: var(--admin-muted); font-size: 13px; line-height: 1.9; }
+.admin-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 17px; }
+.admin-tags span { padding: 5px 10px; border: 1px solid var(--admin-line); border-radius: 30px; color: #b9cfc4; font-size: 10px; }
+.admin-hero-aside { width: 290px; height: 238px; position: relative; display: grid; flex: 0 0 auto; place-items: center; }
+.admin-orbit { position: absolute; width: 232px; height: 232px; border: 1px dashed #516f4960; border-radius: 50%; animation: admin-orbit 90s linear infinite reverse; }
+.admin-record { width: 184px; height: 184px; display: grid; place-items: center; border: 1px solid #405446; border-radius: 50%; background: repeating-radial-gradient(circle, #17231f 0 2px, #29372e 3px, #131d18 4px 6px); box-shadow: 0 22px 42px #0008, inset 0 0 25px #0008; animation: admin-turn 32s linear infinite; }
+.admin-record-label { width: 76px; height: 76px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; border: 6px solid #a8c790; border-radius: 50%; background: #c5deab; color: #223b28; }
+.admin-record-label b { font-size: 9px; letter-spacing: 1px; }
+.admin-record-label i { width: 9px; height: 9px; border: 2px solid #769460; border-radius: 50%; background: #101a18; }
+.admin-record-label small { font-size: 5px; }
+.admin-spark { position: absolute; top: 20px; right: 8px; color: var(--admin-gold); font-size: 24px; animation: admin-glimmer 4s ease-in-out infinite; }
+.admin-record-caption { position: absolute; bottom: 0; display: flex; align-items: center; gap: 10px; padding: 8px 14px; border: 1px solid var(--admin-line); border-radius: 30px; background: #192921; color: #afc6b7; font-size: 10px; white-space: nowrap; }
+.admin-equalizer { height: 14px; display: flex; align-items: center; gap: 3px; }
+.admin-equalizer i { width: 2px; height: 10px; border-radius: 2px; background: var(--admin-mint); animation: admin-wave 1.3s ease-in-out infinite; }
+.admin-equalizer i:nth-child(2) { animation-delay: .2s; }
+.admin-equalizer i:nth-child(3) { animation-delay: .4s; }
+.admin-equalizer i:nth-child(4) { animation-delay: .6s; }
+.admin-equalizer i:nth-child(5) { animation-delay: .8s; }
+.admin-address { margin-top: 13px; color: #8ea599; font-size: 10px; }
+.admin-address strong { color: #c7e7d5; font: 11px Consolas, monospace; overflow-wrap: anywhere; }
+
+/* Recolor existing utility-based cards to match the desktop homepage. */
+.admin-shell [class~="bg-slate-800/60"] {
+  border-color: var(--admin-line);
+  background: linear-gradient(135deg, #1a2b24, #192720);
+  box-shadow: 0 10px 24px #00000012;
+}
+.admin-shell [class~="bg-slate-900"] { border-color: #3c5948; background-color: #101c17; }
+.admin-shell [class~="bg-slate-900/50"],
+.admin-shell [class~="bg-slate-900/60"],
+.admin-shell [class~="bg-slate-950/60"] { background-color: #101c17aa; }
+.admin-shell [class~="border-slate-700"],
+.admin-shell [class~="border-slate-700/50"],
+.admin-shell [class~="divide-slate-700/50"] { border-color: var(--admin-line); }
+.admin-shell [class~="text-white"] { color: #e8f1ee; }
+.admin-shell [class~="text-slate-200"],
+.admin-shell [class~="text-slate-300"] { color: #c9d8cf; }
+.admin-shell [class~="text-slate-400"] { color: #afc3b7; }
+.admin-shell [class~="text-slate-500"] { color: #8ea599; }
+.admin-shell [class~="text-slate-600"] { color: #718878; }
+.admin-shell [class~="text-indigo-300"],
+.admin-shell [class~="text-indigo-400"] { color: var(--admin-mint); }
+.admin-shell [class~="bg-indigo-600"] { background-color: var(--admin-mint); color: #153126; }
+.admin-shell [class~="bg-indigo-500"] { background-color: #b7f2d8; color: #153126; }
+.admin-shell [class~="bg-indigo-700"] { background-color: #2c4337; }
+.admin-shell [class~="bg-indigo-950/30"] { background-color: #193125aa; }
+.admin-shell [class~="border-indigo-500/40"] { border-color: #59816b; }
+.admin-shell [class~="accent-indigo-500"] { accent-color: var(--admin-mint); }
+.admin-shell button { transition: transform .2s ease, background-color .2s ease, border-color .2s ease, color .2s ease; }
+.admin-shell button:hover:not(:disabled) { transform: translateY(-1px); }
+.admin-shell button:focus-visible,
+.admin-shell input:focus-visible,
+.admin-shell select:focus-visible,
+.admin-shell textarea:focus-visible { outline: 2px solid var(--admin-gold); outline-offset: 3px; }
+.admin-shell input:not([type="range"]),
+.admin-shell textarea,
+.admin-shell select { border-color: #3c5948; background-color: #101c17; color: #edf6ef; }
+.admin-shell input:not([type="range"]):focus,
+.admin-shell textarea:focus,
+.admin-shell select:focus { border-color: var(--admin-mint); box-shadow: 0 0 0 3px #9ae6c51a; }
+.admin-shell ::selection { color: #153126; background: var(--admin-mint); }
+.admin-login-card { border-color: var(--admin-line); background: linear-gradient(135deg, #1a2b24, #192720); }
+.admin-source-options button { min-height: 42px; border: 1px solid #3a5345; }
+.admin-table-wrap { overflow-x: auto; }
+.admin-table-wrap table { min-width: 760px; }
+.admin-shell tbody tr:hover { background-color: #29443680; }
+
+@keyframes admin-turn { to { transform: rotate(360deg); } }
+@keyframes admin-orbit { to { transform: rotate(360deg); } }
+@keyframes admin-wave { 0%, 100% { transform: scaleY(.4); } 50% { transform: scaleY(1); } }
+@keyframes admin-glimmer { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
+
+@media (max-width: 760px) {
+  .admin-frame { padding: 24px 16px 36px; }
+  .admin-hero { min-height: 180px; }
+  .admin-hero-aside { width: 145px; height: 180px; margin-right: -12px; transform: scale(.78); transform-origin: center right; }
+  .admin-record-caption { bottom: 0; right: -6px; }
+}
+@media (max-width: 520px) {
+  .admin-hero { align-items: flex-start; min-height: 160px; }
+  .admin-hero-copy { position: relative; z-index: 1; }
+  .admin-hero h1 { font-size: 31px; }
+  .admin-hero-aside { position: absolute; top: -12px; right: -18px; width: 138px; opacity: .55; transform: scale(.67); }
+  .admin-tags { max-width: 250px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .admin-shell *, .admin-shell *::before, .admin-shell *::after { animation: none !important; transition: none !important; }
+}
+</style>

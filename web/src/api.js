@@ -92,23 +92,23 @@ export const adminPlayNow = (index) =>
 export const adminClear = () =>
   request('/api/admin/queue/clear', { method: 'POST', headers: { 'x-admin-key': adminKey() } });
 
-export const adminSetPlaylist = (playlistId) =>
-  request('/api/admin/playlist', { method: 'POST', body: JSON.stringify({ playlistId }), headers: { 'x-admin-key': adminKey() } });
+export const adminSetPlaylist = (playlistId, platform = 'netease') =>
+  request('/api/admin/playlist', { method: 'POST', body: JSON.stringify({ playlistId, platform }), headers: { 'x-admin-key': adminKey() } });
 
-export const adminGetPresets = () =>
-  request('/api/admin/presets', { headers: { 'x-admin-key': adminKey() } });
+export const adminGetPresets = (platform = 'netease') =>
+  request(`/api/admin/presets?platform=${platform}`, { headers: { 'x-admin-key': adminKey() } });
 
-export const adminSearchPlaylists = keyword =>
-  request(`/api/admin/playlist-search?keyword=${encodeURIComponent(keyword)}`, { headers: { 'x-admin-key': adminKey() } });
+export const adminSearchPlaylists = (keyword, platform = 'netease') =>
+  request(`/api/admin/playlist-search?keyword=${encodeURIComponent(keyword)}&platform=${platform}`, { headers: { 'x-admin-key': adminKey() } });
 
-export const adminAddPreset = (playlistId) =>
-  request('/api/admin/presets', { method: 'POST', body: JSON.stringify({ playlistId }), headers: { 'x-admin-key': adminKey() } });
+export const adminAddPreset = (playlistId, platform = 'netease') =>
+  request('/api/admin/presets', { method: 'POST', body: JSON.stringify({ playlistId, platform }), headers: { 'x-admin-key': adminKey() } });
 
-export const adminRemovePreset = (playlistId) =>
-  request(`/api/admin/presets/${playlistId}`, { method: 'DELETE', headers: { 'x-admin-key': adminKey() } });
+export const adminRemovePreset = (playlistId, platform = 'netease') =>
+  request(`/api/admin/presets/${playlistId}?platform=${platform}`, { method: 'DELETE', headers: { 'x-admin-key': adminKey() } });
 
-export const adminGetPlaylist = () =>
-  request('/api/admin/playlist', { headers: { 'x-admin-key': adminKey() } });
+export const adminGetPlaylist = (platform = 'netease') =>
+  request(`/api/admin/playlist?platform=${platform}`, { headers: { 'x-admin-key': adminKey() } });
 
 export const adminAudioDevices = () =>
   request('/api/admin/audio-devices', { headers: { 'x-admin-key': adminKey() } });

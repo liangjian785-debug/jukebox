@@ -99,4 +99,54 @@ async function getChart(topId, limit = 30) {
   return data;
 }
 
-module.exports = { search, getSongDetail, getSongUrl, getChart };
+async function searchPlaylists(keyword) {
+  const json = await getJson(`/search?key=${encodeURIComponent(keyword)}&pageNo=1&pageSize=20&t=2`);
+  if (Number(json.result) !== 100) throw new Error(json.errMsg || 'QQ歌单搜索失败');
+  return ((json.data && json.data.list) || []).map(item => ({
+    id: Number(item.dissid || item.disstid || item.id),
+    name: item.dissname || item.name || '',
+    creator: typeof item.creator === 'string' ? item.creator : (item.creator && (item.creator.name || item.creator.nick)) || item.creator_name || '',
+    count: Number(item.song_count || item.songnum || item.song_cnt || item.songNum || 0),
+    platform: 'qq',
+  })).filter(item => Number.isSafeInteger(item.id) && item.id > 0);
+}
+
+async function getBackgroundPlaylist() {
+  if (config.qqPlaylistId) return getPlaylist(config.qqPlaylistId);
+  const chart = await getChart(config.qqChartId || 26, 100);
+  return { id: 0, name: chart.name || 'QQ热歌榜', songs: chart.songs };
+}
+
+const playlistCache = new Map();
+/** Public playlist details from the bundled QQMusicApi `/songlist?id=` route. */
+async function getPlaylist(id) {
+  const hit = playlistCache.get(String(id));
+  if (hit && Date.now() < hit.expire) return hit.data;
+  const json = await getJson(`/songlist?id=${encodeURIComponent(id)}`);
+  if (Number(json.result) !== 100) throw new Error(json.errMsg || 'QQ playlist not found');
+  const data = json.data || {};
+  if (!data.disstid && !data.dissname) throw new Error('QQ 歌单不存在或暂不可访问');
+  const playlist = {
+    id: data.disstid || id,
+    name: data.dissname || '',
+    songs: (data.songlist || []).map(mapItem).filter((song) => song.songId),
+  };
+  playlistCache.set(String(id), {expire:Date.now() + config.searchCacheMs,data:playlist});
+  if (playlistCache.size > 200) playlistCache.clear();
+  return playlist;
+}
+
+/** Personalized QQ radio (the “猜你喜欢” entry is radio id 99 in `/radio/category`). */
+async function getRadarSongs() {
+  const json = await getJson('/radio?id=99');
+  if (Number(json.result) !== 100) throw new Error(json.errMsg || 'QQ personalized radio unavailable');
+  const data = json.data || {};
+  const tracks = Array.isArray(data.tracks) ? data.tracks : [];
+  const songs = tracks
+    .map((track) => mapItem(track.track_info || track.songInfo || track))
+    .filter((song) => song.songId);
+  if (!songs.length) throw new Error('QQ音乐私人雷达没有返回歌曲，请检查 QQ 登录状态');
+  return songs;
+}
+
+module.exports = { search, getSongDetail, getSongUrl, getChart, getPlaylist, getRadarSongs, searchPlaylists, getBackgroundPlaylist };

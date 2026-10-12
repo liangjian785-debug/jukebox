@@ -17,6 +17,10 @@ module.exports = {
   // 歌单页 URL 中 id 后的数字，如 https://music.163.com/#/playlist?id=123456789 → 123456789
   playlistId: 3778678,
 
+  // QQ 背景播放默认使用热歌榜（QQMusicApi /top 的榜单 id）
+  qqPlaylistId: 0, // 0 使用QQ热歌榜；自选QQ歌单独立保存
+  qqChartId: 26,
+
   // 插播区上限
   maxUserQueue: 300,
 

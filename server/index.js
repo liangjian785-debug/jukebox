@@ -13,6 +13,7 @@ const { Server } = require('socket.io');
 const config = require('./config');
 const state = require('./state');
 const netease = require('./netease');
+const qq = require('./qq');
 const music = require('./music');
 const player = require('./player');
 const persistence = require('./persistence');
@@ -57,14 +58,15 @@ async function playNext() {
     item = scheduledReturnStack.pop();
   } else {
     const r = state.nextSong();
-    if (r.needFm) {
-      // 心动FM：缓存空，异步拉取一批再取
+    if (r.needFm || r.needQqRadar) {
+      // 个性推荐缓存空时，从对应平台异步拉取一批再取
       try {
-        const songs = await netease.getFmSongs();
+        const songs = r.needFm ? await netease.getFmSongs() : await qq.getRadarSongs();
         if (stopping) return;
-        state.fillFm(songs);
+        if (r.needFm) state.fillFm(songs);
+        else state.fillQqRadar(songs);
       } catch (e) {
-        console.log('[FM] 拉取推荐失败: ' + e.message);
+        console.log(`[${r.needFm ? 'FM' : 'QQ私人雷达'}] 拉取推荐失败: ` + e.message);
       }
       const r2 = state.nextSong();
       item = r2.item || null;
@@ -248,7 +250,7 @@ async function init() {
   server.listen(config.port, '0.0.0.0', async () => {
     scheduler.start(playScheduled);
     sendParent({ type: 'ready', service: 'main', port: server.address().port });
-    if (config.playlistId) {
+    if (state.playSource === 'playlist' && config.playlistId) {
       try {
         const pl = await netease.getPlaylist(config.playlistId);
         if (stopping) return;
@@ -257,6 +259,19 @@ async function init() {
       } catch (e) {
         console.log(`默认歌单加载失败：${e.message}（将以仅插播模式运行）`);
       }
+    } else if (state.playSource === 'qq-playlist') {
+      try {
+        const chart = await qq.getBackgroundPlaylist();
+        if (stopping) return;
+        state.setPlaylist(chart.id, chart.name, chart.songs, 'qq');
+        console.log(`QQ默认歌单已加载：${chart.name}（${chart.songs.length} 首）`);
+      } catch (e) {
+        console.log(`QQ默认歌单加载失败：${e.message}（将以仅插播模式运行）`);
+      }
+    } else if (state.playSource === 'fm') {
+      state.setPlaylist(0, '网易云心动FM', [], 'netease');
+    } else if (state.playSource === 'qq-radar') {
+      state.setPlaylist(99, 'QQ音乐私人雷达', [], 'qq');
     } else {
       console.log('未配置默认歌单（config.playlistId=0），将以仅插播模式运行');
     }

@@ -21,17 +21,18 @@ function fmt(sec) {
 </script>
 
 <template>
-  <div class="rounded-2xl bg-slate-800/80 p-4 shadow-lg">
+  <div class="now-playing-card">
     <template v-if="current">
       <div class="flex items-center gap-4">
         <img
           v-if="current.cover"
           :src="current.cover"
-          class="h-16 w-16 rounded-xl object-cover"
+          class="now-playing-cover h-16 w-16 rounded-xl object-cover"
           alt="封面"
         />
-        <div v-else class="flex h-16 w-16 items-center justify-center rounded-xl bg-slate-700 text-2xl">🎵</div>
+        <div v-else class="now-playing-cover flex h-16 w-16 items-center justify-center rounded-xl text-2xl">♫</div>
         <div class="min-w-0 flex-1">
+          <p class="section-kicker">NOW PLAYING</p>
           <p class="truncate text-lg font-bold text-white">{{ current.name }}</p>
           <p class="truncate text-sm text-slate-400">{{ current.artists.join(' / ') }}</p>
           <p class="mt-0.5 text-xs text-slate-500">
@@ -43,7 +44,7 @@ function fmt(sec) {
         </div>
         <!-- 投票跳过按钮 -->
         <button
-          class="shrink-0 rounded-xl px-4 py-2.5 text-sm font-medium transition"
+          class="vote-button shrink-0 rounded-xl px-4 py-2.5 text-sm font-medium transition"
           :class="
             reached
               ? 'bg-slate-600/50 text-slate-400 cursor-not-allowed'
@@ -57,12 +58,13 @@ function fmt(sec) {
           {{ reached ? `已跳过 ${skipInfo.votes}/${skipInfo.required}` : voted ? `已投票 ${skipInfo.votes}/${skipInfo.required}` : `跳过投票 ${skipInfo.votes}/${skipInfo.required}` }}
         </button>
       </div>
-      <p v-if="nextHint" class="mt-3 truncate border-t border-slate-700 pt-2 text-xs text-slate-400">
-        ▼ {{ nextHint }}
+      <p v-if="nextHint" class="next-hint mt-3 truncate border-t pt-2 text-xs">
+        <span aria-hidden="true">↗</span> {{ nextHint }}
       </p>
     </template>
-    <div v-else class="flex items-center justify-center py-4 text-sm text-slate-500">
-      暂无播放，等待点歌…
+    <div v-else class="player-empty flex items-center justify-center py-4 text-sm">
+      <span class="empty-disc" aria-hidden="true">♫</span>
+      <span><b class="section-kicker">YOUR MUSIC ROOM</b><br />暂无播放，等待点歌…</span>
     </div>
   </div>
 </template>
