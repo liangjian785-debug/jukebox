@@ -34,3 +34,23 @@ test('failed check and failed verification leave update uninstalled and permit r
  updater.checkForUpdates=async()=>updater.emit('update-not-available');
  await updates.check();assert.equal(updates.snapshot().status,'current');
 });
+
+test('automatic update opens progress before download and saves before installation',async()=>{
+ const updater=new EventEmitter(),order=[];
+ updater.downloadUpdate=async()=>{order.push('download');updater.emit('update-downloaded');};
+ updater.quitAndInstall=()=>order.push('install');
+ let updates;
+ updates=createUpdates(updater,'1.0.14',()=>{}, {open:async()=>order.push('window'),ready:async()=>{order.push('save');updates.installOnExit();}});
+ updater.emit('update-available',{version:'1.0.15'});
+ await updates.download();await new Promise(resolve=>setImmediate(resolve));
+ assert.deepEqual(order,['window','download','save','install']);
+ assert.equal(updates.snapshot().status,'installing');
+});
+
+test('progress window failure prevents downloading or installing',async()=>{
+ const updater=new EventEmitter();let downloads=0;
+ updater.downloadUpdate=async()=>downloads++;
+ const updates=createUpdates(updater,'1.0.14',()=>{}, {open:async()=>{throw Error('window failed');}});
+ updater.emit('update-available',{version:'1.0.15'});
+ await updates.download();assert.equal(downloads,0);assert.equal(updates.snapshot().status,'error');
+});

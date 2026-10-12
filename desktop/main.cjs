@@ -16,6 +16,7 @@ const stateURL = pathToFileURL(stateFile).href;
 let statusWindow, musicView, tray, manager, activePage = 'home', exiting = false, allowExit = false, closeNotice = false;
 let loginView, loginCapture, loginMessage = '点击登录后，在网易云官方页面完成登录。';
 let updates;
+let updateWindow;
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on('second-instance', () => showStatus());
@@ -176,7 +177,10 @@ async function initialize() {
   handler('folder', kind => { if (!['data', 'logs'].includes(kind)) throw new Error('非法目录'); return shell.openPath(kind === 'data' ? dataDir : path.join(dataDir, 'logs')); });
   if (!snapshot().needsSetup) await run(() => manager.start());
   if (app.isPackaged) {
-    updates = require('./updates.cjs').createUpdates(require('electron-updater').autoUpdater, app.getVersion(), broadcast);
+    updateWindow = require('./update-window.cjs').createUpdateWindow(dataDir, path.join(process.resourcesPath, 'update-window.ps1'), app.getVersion());
+    updates = require('./updates.cjs').createUpdates(require('electron-updater').autoUpdater, app.getVersion(), () => {
+      updateWindow.publish(updates.snapshot()); broadcast();
+    }, { open: () => updateWindow.open(updates.snapshot()), ready: quit });
     updates.check();
   }
 }
@@ -191,7 +195,7 @@ async function quit() {
   if (exiting) return;
   exiting = true;
   try { loginCapture?.stop(); await manager?.stop(); musicView?.webContents.close(); loginView?.webContents.close(); tray?.destroy(); allowExit = true; updates?.installOnExit(); app.quit(); }
-  catch (error) { exiting = false; manager.error = error.message; manager.changed('failed'); showStatus(); }
+  catch (error) { exiting = false; allowExit = false; if (['ready', 'installing'].includes(updates?.snapshot().status)) updates.fail(); manager.error = error.message; manager.changed('failed'); showStatus(); }
 }
 app.on('before-quit', event => { if (!allowExit) { event.preventDefault(); quit(); } });
 app.on('window-all-closed', () => {});

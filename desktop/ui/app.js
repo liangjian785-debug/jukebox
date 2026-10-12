@@ -6,7 +6,7 @@ function update(state) {
     $('update-version').textContent = '当前版本：' + upgrade.version;
     $('update-status').textContent = upgrade.message;
     $('update-notes').textContent = upgrade.notes || '';
-    $('update-check').disabled = ['checking', 'downloading', 'ready'].includes(upgrade.status);
+    $('update-check').disabled = ['checking', 'downloading', 'ready', 'installing'].includes(upgrade.status);
     $('update-download').hidden = upgrade.status !== 'available';
   }
   document.body.classList.toggle('business', state.page !== 'home');
