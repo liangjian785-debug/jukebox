@@ -16,6 +16,7 @@ const defaults = {
   searchCacheMs: 30000,                // 搜索缓存时长
   mpvPath: 'mpv',                      // mpv 可执行文件（Windows 可写 server/mpv.exe）
   volume: 100,                         // 播放音量
+  loudnessNormalization: true,         // 自动响度均衡（双平台共用；false 可关闭）
   audioDevice: '',                     // 音频输出设备（mpv --audio-device 值；空 = 系统默认）
   fmMode: false,                       // 启动时默认播放源是否为心动FM（true=FM，false=歌单）
   autoStart: false,                    // 启动时是否自动开始播放（false=默认暂停，等管理台点开始）

@@ -36,6 +36,9 @@ module.exports = {
   // 播放音量 0-100
   volume: 100,
 
+  // 自动响度均衡：缩小不同歌曲的响度差异，保留音量和淡入淡出
+  loudnessNormalization: true,
+
   // 音频输出设备（mpv --audio-device 值，如 'wasapi/{fa18bd1c-...}'；空 = 系统默认）
   // 可用设备可在管理台"播放控制"里查看选择
   audioDevice: '',
