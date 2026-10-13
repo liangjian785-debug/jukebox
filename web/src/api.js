@@ -128,6 +128,9 @@ export const adminSkip = () =>
 export const adminGetSkipConfig = () =>
   request('/api/admin/skip-config', { headers: { 'x-admin-key': adminKey() } });
 
+export const adminSetControlSettings = (settings) =>
+  request('/api/admin/control-settings', { method: 'POST', body: JSON.stringify(settings), headers: { 'x-admin-key': adminKey() } });
+
 export const adminSetSkipConfig = (required) =>
   request('/api/admin/skip-config', { method: 'POST', body: JSON.stringify({ required }), headers: { 'x-admin-key': adminKey() } });
 

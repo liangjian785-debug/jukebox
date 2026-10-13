@@ -176,7 +176,7 @@ onMounted(async () => {
       <!-- 插播队列 -->
       <QueueList
         :queue="state.userQueue"
-        :max="300"
+        :max="state?.queueLimits?.maxUserQueue ?? 300"
         :playlist-hint="state.playlistMeta.name ? `歌单 ${state.playlistMeta.name}` : ''"
         :my-canonical-id="myCanonicalId"
         :boost-required="state.boostRequired || 3"

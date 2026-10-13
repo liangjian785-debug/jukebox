@@ -53,6 +53,8 @@ function savePresets(presets) {
 function createRouter(io, player, playNext, system) {
   const router = express.Router();
   const broadcast = () => io.emit('state:update', state.snapshot());
+  const controlSettings = () => ({ maxPerUser: config.maxPerUser, maxUserQueue: config.maxUserQueue,
+    autoStart: config.autoStart === true, loudnessNormalization: config.loudnessNormalization !== false });
 
   // 用户活跃记录中间件（带 x-client-id 的请求都会登记 IP/昵称）
   router.use((req, res, next) => {
@@ -370,6 +372,7 @@ function createRouter(io, player, playNext, system) {
     };
     res.json({
       ...snap,
+      controlSettings: controlSettings(),
       player: {
         running: player.isPlaying(),
         paused: player.paused,
@@ -465,6 +468,36 @@ function createRouter(io, player, playNext, system) {
   router.post('/admin/skip', adminAuth, (req, res) => {
     player.stop();
     res.json({ ok: true });
+  });
+
+  /** Control settings are validated and persisted before changing runtime state. */
+  router.post('/admin/control-settings', adminAuth, (req, res) => {
+    const values = req.body || {};
+    const keys = ['maxPerUser', 'maxUserQueue', 'autoStart', 'loudnessNormalization'];
+    if (Object.keys(values).some(key => !keys.includes(key)) ||
+        !Number.isInteger(values.maxPerUser) || values.maxPerUser < 1 || values.maxPerUser > 300 ||
+        !Number.isInteger(values.maxUserQueue) || values.maxUserQueue < 1 || values.maxUserQueue > 3000 ||
+        typeof values.autoStart !== 'boolean' || typeof values.loudnessNormalization !== 'boolean') {
+      return res.status(400).json({ error: '每人上限需为 1–300 的整数，点歌区上限需为 1–3000 的整数，开关需为布尔值' });
+    }
+    const settings = Object.fromEntries(keys.map(key => [key, values[key]]));
+    const cfgPath = require('./paths').configPath;
+    const tempPath = cfgPath + '.settings.tmp';
+    try {
+      const source = fs.existsSync(cfgPath) ? fs.readFileSync(cfgPath, 'utf8') : 'module.exports = {};\n';
+      const block = '// BEGIN JUKEBOX_ADMIN_SETTINGS\n' + keys.map(key => `module.exports.${key} = ${JSON.stringify(settings[key])};`).join('\n') + '\n// END JUKEBOX_ADMIN_SETTINGS';
+      const marker = /\/\/ BEGIN JUKEBOX_ADMIN_SETTINGS[\s\S]*?\/\/ END JUKEBOX_ADMIN_SETTINGS/;
+      const next = marker.test(source) ? source.replace(marker, () => block) : source + '\n' + block + '\n';
+      fs.writeFileSync(tempPath, next, 'utf8');
+      fs.renameSync(tempPath, cfgPath);
+    } catch {
+      try { fs.unlinkSync(tempPath); } catch {}
+      return res.status(500).json({ error: '设置未保存，请检查用户数据目录的写入权限后重试' });
+    }
+    Object.assign(config, settings);
+    broadcast();
+    logger.log('action', `管理员修改控制设置：每人 ${settings.maxPerUser} 首，点歌区 ${settings.maxUserQueue} 首，启动自动播放${settings.autoStart ? '开启' : '关闭'}，响度均衡${settings.loudnessNormalization ? '开启' : '关闭'}`, 'admin');
+    res.json({ ok: true, settings });
   });
 
   /** GET /api/admin/skip-config 当前投票跳过配置 */

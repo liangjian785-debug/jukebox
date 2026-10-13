@@ -6,6 +6,7 @@ import {
   adminAudioDevices, adminSetAudioDevice,
   adminSetPlaySource, adminSkip, adminSetSkipConfig, adminSetBoostConfig, adminGetUsers, adminGetLogs, adminRestart, adminShutdown,
   adminSetChannels, adminSetCookie, adminGetCookieStatus, adminMoveQueue, adminPlayNow,
+  adminSetControlSettings,
   adminGetSchedules, adminAddSchedule, adminSetScheduleEnabled, adminDeleteSchedule,
 } from '../api';
 import { search, queueSong } from '../api';
@@ -36,6 +37,10 @@ const audioDevices = ref([]);
 const audioCurrent = ref('auto');
 const skipRequired = ref(8);
 const boostRequired = ref(3);
+const controlDraft = ref({ maxPerUser: 10, maxUserQueue: 300, autoStart: false, loudnessNormalization: true });
+const controlReady = ref(false);
+const controlDirty = ref(false);
+const controlSaving = ref(false);
 const users = ref([]);
 const logs = ref([]);
 const cookieStatus = ref(null);
@@ -101,6 +106,10 @@ async function refreshAll() {
     const nextStatus = await adminStatus();
     if (refreshId !== statusRefreshId) return;
     status.value = nextStatus;
+    if (nextStatus.controlSettings && !controlDirty.value && !controlSaving.value) {
+      controlDraft.value = { ...nextStatus.controlSettings };
+      controlReady.value = true;
+    }
     queue.value = status.value.userQueue || [];
     if (status.value.skip?.required) skipRequired.value = status.value.skip.required;
     if (status.value.boostRequired) boostRequired.value = status.value.boostRequired;
@@ -111,6 +120,30 @@ async function refreshAll() {
 }
 
 const adminSearchEnabled = computed(() => status.value?.channels?.[adminSearchPlatform.value] !== false);
+
+async function saveControlSettings() {
+  if (controlSaving.value || !controlReady.value) return;
+  const settings = { ...controlDraft.value };
+  if (!Number.isInteger(settings.maxPerUser) || settings.maxPerUser < 1 || settings.maxPerUser > 300 ||
+      !Number.isInteger(settings.maxUserQueue) || settings.maxUserQueue < 1 || settings.maxUserQueue > 3000) {
+    return showToast('请输入范围内的整数：每人 1–300 首，点歌区 1–3000 首');
+  }
+  controlSaving.value = true;
+  try {
+    const result = await adminSetControlSettings(settings);
+    controlDraft.value = { ...result.settings };
+    controlDirty.value = false;
+    showToast('控制设置已保存');
+    await refreshAll();
+  } catch (error) { showToast(error.message); }
+  finally { controlSaving.value = false; }
+}
+
+function resetControlSettings() {
+  if (!status.value?.controlSettings) return;
+  controlDraft.value = { ...status.value.controlSettings };
+  controlDirty.value = false;
+}
 
 async function doAdminSearch() {
   const keyword = adminSearchKeyword.value.trim();
@@ -811,6 +844,38 @@ onUnmounted(() => { socket?.close(); removeLoginListener?.(); });
             <p v-if="!schedules.length" class="py-3 text-center text-xs text-slate-600">暂无定时任务</p>
           </div>
         </div>
+
+        <form class="rounded-xl border border-slate-700/50 bg-slate-800/60 p-4" @submit.prevent="saveControlSettings">
+          <div class="mb-4 flex items-center justify-between gap-3">
+            <div><h2 class="text-sm font-semibold text-slate-300">控制设置</h2><p class="mt-1 text-xs text-slate-500">调整点歌限额和播放偏好</p></div>
+            <span v-if="controlDirty" class="text-xs text-amber-300">尚未保存</span>
+          </div>
+          <fieldset :disabled="controlSaving || !controlReady" class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div>
+              <label for="max-per-user" class="text-xs text-slate-300">每人点歌上限</label>
+              <input id="max-per-user" v-model.number="controlDraft.maxPerUser" type="number" min="1" max="300" step="1" required class="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none" @input="controlDirty = true" />
+              <p class="mt-1 text-xs text-slate-500">1–300 首，只计算待播歌曲；同 IP 共享限额</p>
+            </div>
+            <div>
+              <label for="max-user-queue" class="text-xs text-slate-300">点歌区总上限</label>
+              <input id="max-user-queue" v-model.number="controlDraft.maxUserQueue" type="number" min="1" max="3000" step="1" required class="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none" @input="controlDirty = true" />
+              <p class="mt-1 text-xs text-slate-500">1–3000 首，所有用户共用</p>
+            </div>
+            <div>
+              <label class="flex items-center gap-2 text-sm text-slate-300"><input v-model="controlDraft.autoStart" type="checkbox" @change="controlDirty = true" />启动自动播放</label>
+              <p class="mt-2 text-xs text-slate-500">下次启动或重启主服务生效；关闭时等待点击开始播放</p>
+            </div>
+            <div>
+              <label class="flex items-center gap-2 text-sm text-slate-300"><input v-model="controlDraft.loudnessNormalization" type="checkbox" @change="controlDirty = true" />响度均衡</label>
+              <p class="mt-2 text-xs text-slate-500">减少歌曲间的音量差异，从下一首歌曲生效</p>
+            </div>
+          </fieldset>
+          <div class="mt-4 flex flex-wrap items-center gap-3">
+            <button type="submit" :disabled="controlSaving || !controlReady || !controlDirty" class="rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white disabled:opacity-40">{{ controlSaving ? '保存中…' : '保存控制设置' }}</button>
+            <button type="button" :disabled="controlSaving || !controlDirty" class="rounded-lg bg-slate-700 px-3 py-2 text-sm text-slate-300 disabled:opacity-40" @click="resetControlSettings">还原已保存</button>
+            <p class="text-xs text-slate-500">限额立即生效。降低上限不会删除已排队歌曲，超限时暂停接受新的点歌。</p>
+          </div>
+        </form>
 
         <!-- 三栏主体 -->
         <div class="grid grid-cols-1 gap-4 xl:grid-cols-3">

@@ -1,6 +1,6 @@
 {
   "name": "jukebox-desktop",
-  "version": "1.0.16",
+  "version": "1.0.17",
   "private": true,
   "description": "局域网点歌机 Windows 桌面应用",
   "main": "main.cjs",
@@ -84,14 +84,14 @@
       {
         "provider": "github",
         "repo": "jukebox",
-        "owner": "liangjian785-debug"
+        "owner": "sangui0312"
       }
     ]
   },
   "engines": {
     "node": ">=22.12.0"
   },
-  "author": "liangjian785-debug",
+  "author": "sangui0312",
   "dependencies": {
     "electron-updater": "^6.8.9"
   }

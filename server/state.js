@@ -119,6 +119,7 @@ class State {
         voters: [...this.skipVotes.keys()],
       },
       boostRequired: config.boostRequired,
+      queueLimits: { maxPerUser: config.maxPerUser, maxUserQueue: config.maxUserQueue },
       channels: this.channels,
       playback: this.playback,
       version: this.version,
