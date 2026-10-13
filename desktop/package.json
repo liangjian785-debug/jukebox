@@ -83,7 +83,7 @@
     "publish": [
       {
         "provider": "github",
-        "repo": "jukebox",
+        "repo": "jukebox-",
         "owner": "sangui0312"
       }
     ]

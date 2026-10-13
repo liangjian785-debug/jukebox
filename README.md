@@ -10,7 +10,7 @@
 
 桌面版面向 Windows 10/11 x64，安装包名为 `Jukebox-Setup-<版本>-x64.exe`。安装包内置运行环境和 mpv，使用者无需安装 Node.js 或执行启动脚本。
 
-**[下载 Windows x64 安装程序 v1.0.17](https://github.com/sangui0312/jukebox/releases/download/v1.0.17/Jukebox-Setup-1.0.17-x64.exe)** · **[查看最新版本说明与校验文件](https://github.com/sangui0312/jukebox/releases/latest)**
+**[下载 Windows x64 安装程序 v1.0.17](https://github.com/sangui0312/jukebox-/releases/download/v1.0.17/Jukebox-Setup-1.0.17-x64.exe)** · **[查看最新版本说明与校验文件](https://github.com/sangui0312/jukebox-/releases/latest)**
 
 源码可通过本仓库的 **Code → Download ZIP** 下载，或使用下文的 Git 命令获取。安装程序位于 Release 的 **Assets**，不需要下载整个源码仓库。
 
@@ -123,7 +123,7 @@ npm --prefix ./desktop run build -- --config.electronDist=node_modules/electron/
 ### 1. 下载并进入项目目录
 
 ```powershell
-git clone https://github.com/sangui0312/jukebox.git
+git clone https://github.com/sangui0312/jukebox-.git jukebox
 Set-Location -LiteralPath './jukebox'
 ```
 

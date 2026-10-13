@@ -152,7 +152,7 @@ async function initialize() {
   handler('restart', () => run(() => manager.restart()));
   handler('update-check', () => updates?.check());
   handler('update-download', () => updates?.download());
-  handler('update-release', () => shell.openExternal('https://github.com/sangui0312/jukebox/releases/latest'));
+  handler('update-release', () => shell.openExternal('https://github.com/sangui0312/jukebox-/releases/latest'));
   handler('resume', () => run(() => manager.resumeMain()));
   handler('open', async page => {
     const returningToAdmin = page === 'admin' && activePage.endsWith('-login');
