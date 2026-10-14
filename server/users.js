@@ -12,13 +12,15 @@ class UserRegistry {
   /** 记录一次活跃，返回 canonicalId；同一 IP 只能是一个用户（不关心昵称） */
   touch(clientId, ip, nickname) {
     if (!clientId) return clientId;
+    nickname = typeof nickname === 'string' ? nickname.trim().slice(0, 12) : '';
     const now = Date.now();
     const existing = this._findByAlias(clientId);
     if (existing) {
       existing.aliases.add(clientId);
       existing.lastSeen = now;
       if (ip) existing.ip = ip;
-      // 注意：不覆盖昵称——昵称只由改名接口更新，避免点歌时旧昵称污染用户表
+      // Recover missing names without letting stale browser values undo a rename.
+      if (!existing.nickname && nickname) existing.nickname = nickname;
       return existing.canonicalId;
     }
     // 合并：只要有 IP，就归入该 IP 对应的用户（同一 IP 只能一个用户）
@@ -27,7 +29,7 @@ class UserRegistry {
       if (match) {
         match.aliases.add(clientId);
         match.lastSeen = now;
-        // 同上：不覆盖昵称
+        if (!match.nickname && nickname) match.nickname = nickname;
         return match.canonicalId;
       }
     }
@@ -102,7 +104,7 @@ class UserRegistry {
     for (const u of arr || []) {
       this.users.set(u.canonicalId, {
         canonicalId: u.canonicalId,
-        aliases: new Set(u.aliases || []),
+        aliases: new Set([u.canonicalId, ...(u.aliases || [])]),
         nickname: u.nickname || '',
         ip: u.ip || '',
         firstSeen: u.firstSeen || Date.now(),

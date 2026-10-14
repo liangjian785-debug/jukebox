@@ -31,6 +31,9 @@ test('normalization defaults on and keeps the user volume and fade script', asyn
   assert.ok(args.some(a => a.startsWith('--af=lavfi=[loudnorm=')));
   assert.ok(args.includes('--replaygain=no'));
   assert.ok(args.includes('--volume=0'));
+  assert.ok(args.includes('--vid=no'));
+  assert.ok(args.includes('--audio-display=no'));
+  assert.ok(args.includes('--force-window=no'));
   assert.ok(args.includes('--script-opts=jukebox-volume=50'));
   assert.ok(args.some(a => a.startsWith('--script=')));
   const disabled = await playbackArgs(false);

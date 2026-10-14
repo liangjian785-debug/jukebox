@@ -29,6 +29,8 @@ export function setNickname(name) {
 
 async function request(path, options = {}) {
   const headers = { 'x-client-id': getClientId(), ...(options.headers || {}) };
+  const nickname = getNickname();
+  if (nickname) headers['x-client-nickname'] = encodeURIComponent(nickname);
   if (options.body) headers['Content-Type'] = 'application/json';
   const res = await fetch(path, { ...options, headers });
   const data = await res.json().catch(() => ({}));

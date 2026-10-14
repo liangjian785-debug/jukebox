@@ -60,8 +60,21 @@ function createRouter(io, player, playNext, system) {
   router.use((req, res, next) => {
     const cid = req.get('x-client-id');
     if (cid) {
-      const nickname = (req.body && req.body.nickname) || '';
+      const previous = users.get(cid);
+      const previousName = previous?.nickname;
+      const previousIp = previous?.ip;
+      let nickname = '';
+      if (req.path !== '/me/nickname') {
+        if (typeof req.body?.nickname === 'string') nickname = req.body.nickname;
+        if (!nickname) { try { nickname = decodeURIComponent(req.get('x-client-nickname') || ''); } catch {} }
+      }
       users.touch(cid, cleanIp(req.ip), nickname);
+      const user = users.get(cid);
+      if (!previous || user.nickname !== previousName || user.ip !== previousIp) {
+        const synced = user.nickname ? state.updateNickname(cid, user.nickname) : { updated: 0 };
+        if (!synced.updated) state.bump();
+        broadcast();
+      }
     }
     next();
   });
@@ -97,7 +110,7 @@ function createRouter(io, player, playNext, system) {
   /** GET /api/me 当前身份（clientId → canonicalId，前端判断"可删自己的歌"） */
   router.get('/me', (req, res) => {
     const clientId = req.get('x-client-id') || '';
-    res.json({ clientId, canonicalId: clientId ? users.canonicalOf(clientId) : '' });
+    res.json({ clientId, canonicalId: clientId ? users.canonicalOf(clientId) : '', nickname: users.get(clientId)?.nickname || '' });
   });
 
   /** GET /api/chart-songs?platform=&id=&limit= 榜单歌曲（netease=歌单ID，qq=topId；缓存） */
@@ -197,7 +210,7 @@ function createRouter(io, player, playNext, system) {
   router.post('/me/nickname', (req, res) => {
     const clientId = req.get('x-client-id') || '';
     if (!clientId) return res.status(400).json({ error: '缺少 x-client-id' });
-    const nickname = ((req.body && req.body.nickname) || '').trim().slice(0, 12);
+    const nickname = typeof req.body?.nickname === 'string' ? req.body.nickname.trim().slice(0, 12) : '';
     if (!nickname) return res.status(400).json({ error: '昵称不能为空' });
     const before = users.get(clientId);
     const oldNickname = (before && before.nickname) || '匿名';

@@ -84,7 +84,7 @@ class Player {
     this.manualPaused = false;
     this._ipcRetries = 0;
     let proc;
-    const args = ['--volume=0', '--no-terminal', `--input-ipc-server=${IPC_NAME}`, `--script=${fadeScript}`, `--script-opts=jukebox-volume=${this.volume}`];
+    const args = ['--volume=0', '--no-terminal', '--vid=no', '--audio-display=no', '--force-window=no', '--osc=no', `--input-ipc-server=${IPC_NAME}`, `--script=${fadeScript}`, `--script-opts=jukebox-volume=${this.volume}`];
     // Normalize the decoded audio before user volume and fades. Live streams use
     // one-pass normalization; resample after the true-peak limiter to avoid a
     // 192 kHz device output. ReplayGain is disabled to avoid applying gain twice.

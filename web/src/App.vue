@@ -114,7 +114,6 @@ const nextHint = computed(() => {
 });
 
 onMounted(async () => {
-  ensureNickname();
   try {
     state.value = await getState();
   } catch (e) {
@@ -124,9 +123,11 @@ onMounted(async () => {
   try {
     const me = await getMe();
     myCanonicalId.value = me.canonicalId || myClientId;
+    if (me.nickname) { setNickname(me.nickname); myNickname.value = me.nickname; }
   } catch (e) {
     myCanonicalId.value = myClientId;
   }
+  ensureNickname();
   connectSocket((s) => (state.value = s));
 });
 </script>

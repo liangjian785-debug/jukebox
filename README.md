@@ -4,13 +4,13 @@
 
 支持网易云音乐和 QQ 音乐。管理员可以控制播放、调整音量和输出设备、管理队列、切换背景歌单，并设置定时播放任务。
 
-本文按 **v1.0.17** 编写：支持双平台歌单管理、QQ 私人雷达、歌曲响度均衡、管理端控制设置，以及带独立进度窗口的自动更新。推荐普通用户使用 Windows 安装包；源码运行和构建步骤单独列在下文。
+本文按 **v1.0.18** 编写：支持双平台歌单管理、QQ 私人雷达、歌曲响度均衡、管理端控制设置，以及带独立进度窗口的自动更新。推荐普通用户使用 Windows 安装包；源码运行和构建步骤单独列在下文。
 
 ## Windows 桌面版
 
 桌面版面向 Windows 10/11 x64，安装包名为 `Jukebox-Setup-<版本>-x64.exe`。安装包内置运行环境和 mpv，使用者无需安装 Node.js 或执行启动脚本。
 
-**[下载 Windows x64 安装程序 v1.0.17](https://github.com/sangui0312/jukebox-/releases/download/v1.0.17/Jukebox-Setup-1.0.17-x64.exe)** · **[查看最新版本说明与校验文件](https://github.com/sangui0312/jukebox-/releases/latest)**
+**[下载 Windows x64 安装程序 v1.0.18](https://github.com/sangui0312/jukebox-/releases/download/v1.0.18/Jukebox-Setup-1.0.18-x64.exe)** · **[查看最新版本说明与校验文件](https://github.com/sangui0312/jukebox-/releases/latest)**
 
 源码可通过本仓库的 **Code → Download ZIP** 下载，或使用下文的 Git 命令获取。安装程序位于 Release 的 **Assets**，不需要下载整个源码仓库。
 
@@ -63,7 +63,7 @@ v1.0.14 及更早版本仍按旧界面提示自行退出一次，升级后才使
 
 桌面用户数据保存在 `%APPDATA%/JukeboxDesktop`，可通过“用户数据”按钮打开。其中 `server/` 保存配置、队列和定时任务，`qq/` 保存 QQ Cookie。桌面版首次使用独立数据目录，不自动导入源码版的账号与队列；覆盖安装和默认卸载保留用户数据。
 
-安装包未做代码签名，Windows 可能显示未知发布者提示。请从本仓库 Release 下载，并使用同名 `.sha256` 文件核对安装程序；PowerShell 中可运行 `Get-FileHash -Algorithm SHA256 -LiteralPath './Jukebox-Setup-1.0.17-x64.exe'`。
+安装包未做代码签名，Windows 可能显示未知发布者提示。请从本仓库 Release 下载，并使用同名 `.sha256` 文件核对安装程序；PowerShell 中可运行 `Get-FileHash -Algorithm SHA256 -LiteralPath './Jukebox-Setup-1.0.18-x64.exe'`。
 
 安装包包含第三方运行组件，其许可文件保存在安装目录的 `resources/licenses`，Electron 的许可文件位于安装目录。mpv、FFmpeg 版本、上游源码和构建来源记录在 [desktop/mpv-source.json](desktop/mpv-source.json)。
 
@@ -409,6 +409,16 @@ New-NetFirewallRule -DisplayName '局域网点歌机 TCP 8080' -Direction Inboun
 命令参数说明见 [Microsoft 的 New-NetFirewallRule 文档](https://learn.microsoft.com/en-us/powershell/module/netsecurity/new-netfirewallrule)。如果当前是“公用”网络，上面的专用网络规则不会生效，应先核对当前网络类型；只把可信局域网设为专用网络。
 
 也可在可信局域网中**短暂关闭当前网络的防火墙进行排查**；若关闭后恢复访问，重新开启防火墙并按上述方法放行。若安装了其他安全软件，还需检查其防火墙规则。放行后仍无法访问时，继续检查 IP 地址、访客网络隔离和服务状态。
+
+### 管理端用户名全显示“匿名”
+
+v1.0.18 修复了已保存昵称未同步到用户表的问题。升级后，点歌用户刷新页面即可补回浏览器中已保存的昵称；用户表已有明确昵称时，不会被旧浏览器缓存覆盖。没有点歌队列时修改昵称也会保存，重启后保留。
+
+启动时会尝试从旧的待播歌曲记录补回缺失昵称。用户从未设置昵称、浏览器缓存和历史记录中都没有昵称时，仍显示“匿名”；可在点歌台顶部修改昵称。昵称来自用户填写，不是根据 IP 自动生成。
+
+### 播放歌曲时弹出 mpv 封面窗口
+
+部分音源包含封面图片，mpv 可能将图片作为视频显示。v1.0.18 强制只播放音频，禁用视频、封面窗口和播放器屏幕控件；管理台仍可控制暂停、继续、音量和输出设备。
 
 ### 能点歌但没有声音
 

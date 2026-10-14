@@ -82,6 +82,16 @@ class State {
     if (data.current) this.current = data.current;
     if (['playlist', 'fm', 'qq-playlist', 'qq-radar'].includes(data.playSource)) this.playSource = data.playSource;
     users.restore(data.users);
+    let recovered = false;
+    // Recover only missing names from actual song requests, never replace a
+    // saved explicit rename or invent a name for an IP address.
+    for (const song of [...this.userQueue].reverse().concat(this.current || [])) {
+      const user = users.get(song.requestedBy);
+      if (user && !user.nickname && typeof song.nickname === 'string' && song.nickname.trim() && song.nickname !== '匿名') {
+        users.setNickname(song.requestedBy, song.nickname.trim().slice(0, 12));
+        recovered = true;
+      }
+    }
     // 统一历史昵称 + 旧数据补 platform（多平台改造前点的歌默认 netease）
     for (const s of this.userQueue) {
       if (!s.platform) s.platform = 'netease';
@@ -89,6 +99,7 @@ class State {
       if (u && u.nickname) s.nickname = u.nickname;
     }
     if (this.current && !this.current.platform) this.current.platform = 'netease';
+    if (recovered) this.bump();
   }
 
   playlistMeta() {
@@ -214,6 +225,7 @@ class State {
 
   /** 修改昵称：同步用户表 + 队列里该用户（含合并号）的所有歌 */
   updateNickname(clientId, nickname) {
+    const changed = users.get(clientId)?.nickname !== nickname;
     const canonicalId = users.setNickname(clientId, nickname);
     let updated = 0;
     for (const s of this.userQueue) {
@@ -222,7 +234,7 @@ class State {
         updated++;
       }
     }
-    if (updated > 0) this.bump();
+    if (changed || updated > 0) this.bump();
     return { ok: true, updated };
   }
 
