@@ -4,13 +4,13 @@
 
 支持网易云音乐和 QQ 音乐。管理员可以控制播放、调整音量和输出设备、管理队列、切换背景歌单，并设置定时播放任务。
 
-本文按 **v1.0.18** 编写：支持双平台歌单管理、QQ 私人雷达、歌曲响度均衡、管理端控制设置，以及带独立进度窗口的自动更新。推荐普通用户使用 Windows 安装包；源码运行和构建步骤单独列在下文。
+本文按 **v1.0.19** 编写：支持双平台歌单管理、QQ 私人雷达、歌曲响度均衡、管理端控制设置，以及带独立进度窗口的自动更新。推荐普通用户使用 Windows 安装包；源码运行和构建步骤单独列在下文。
 
 ## Windows 桌面版
 
 桌面版面向 Windows 10/11 x64，安装包名为 `Jukebox-Setup-<版本>-x64.exe`。安装包内置运行环境和 mpv，使用者无需安装 Node.js 或执行启动脚本。
 
-**[下载 Windows x64 安装程序 v1.0.18](https://github.com/sangui0312/jukebox-/releases/download/v1.0.18/Jukebox-Setup-1.0.18-x64.exe)** · **[查看最新版本说明与校验文件](https://github.com/sangui0312/jukebox-/releases/latest)**
+**[下载 Windows x64 安装程序 v1.0.19](https://github.com/sangui0312/jukebox-/releases/download/v1.0.19/Jukebox-Setup-1.0.19-x64.exe)** · **[查看最新版本说明与校验文件](https://github.com/sangui0312/jukebox-/releases/latest)**
 
 源码可通过本仓库的 **Code → Download ZIP** 下载，或使用下文的 Git 命令获取。安装程序位于 Release 的 **Assets**，不需要下载整个源码仓库。
 
@@ -63,7 +63,7 @@ v1.0.14 及更早版本仍按旧界面提示自行退出一次，升级后才使
 
 桌面用户数据保存在 `%APPDATA%/JukeboxDesktop`，可通过“用户数据”按钮打开。其中 `server/` 保存配置、队列和定时任务，`qq/` 保存 QQ Cookie。桌面版首次使用独立数据目录，不自动导入源码版的账号与队列；覆盖安装和默认卸载保留用户数据。
 
-安装包未做代码签名，Windows 可能显示未知发布者提示。请从本仓库 Release 下载，并使用同名 `.sha256` 文件核对安装程序；PowerShell 中可运行 `Get-FileHash -Algorithm SHA256 -LiteralPath './Jukebox-Setup-1.0.18-x64.exe'`。
+安装包未做代码签名，Windows 可能显示未知发布者提示。请从本仓库 Release 下载，并使用同名 `.sha256` 文件核对安装程序；PowerShell 中可运行 `Get-FileHash -Algorithm SHA256 -LiteralPath './Jukebox-Setup-1.0.19-x64.exe'`。
 
 安装包包含第三方运行组件，其许可文件保存在安装目录的 `resources/licenses`，Electron 的许可文件位于安装目录。mpv、FFmpeg 版本、上游源码和构建来源记录在 [desktop/mpv-source.json](desktop/mpv-source.json)。
 
@@ -292,6 +292,8 @@ v1.0.16 默认对所有播放源启用响度均衡，目标为 -16 LUFS，真峰
 - **QQ 私人雷达**：使用 QQ 个性电台推荐，需要可用的 QQ 音乐登录状态。
 
 在歌单管理区域先选择网易云或 QQ 音乐，再输入歌单名称搜索后点击“添加”；也可粘贴对应平台的歌单分享链接（支持短链接）或输入歌单 ID。两平台的预设与已选歌单独立保存，点击预设会启用对应平台的歌单播放源；QQ 页可点击默认热歌榜恢复默认。播放源旁的标签会随当前平台显示“网易云”或“QQ音乐”；切换管理标签只切换歌单列表，点击歌单预设才会切换播放源。
+
+QQ 歌单链接支持桌面版 `y.qq.com/n/ryqq_v2/playlist/…`、手机分享页 `i2.y.qq.com/n3/other/pages/details/playlist.html?id=…` 和 `c6.y.qq.com` 短链接。粘贴分享链接前，请先切换到“QQ音乐”歌单管理。
 
 未配置歌单时默认使用热歌榜。程序启动仍保持暂停；点击开始播放后，用户队列为空时播放所选背景播放源。歌单加载失败时等待点歌。
 

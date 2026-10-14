@@ -6,6 +6,20 @@ test('QQ full/share links support only playlist URLs and approved redirect targe
  for(const input of ['0','https://y.qq.com/n/ryqq/songDetail/123','https://y.qq.com.evil.example/n/ryqq/playlist/123'])await assert.rejects(qqPlaylistId(input));
  await assert.rejects(qqPlaylistId('https://c6.y.qq.com/base/fcgi-bin/u?x=1',async()=>({status:302,headers:new Headers({location:'http://127.0.0.1/private'})})));
 });
+test('QQ mobile playlist shares resolve directly and through approved short links',async()=>{
+ const mobile='https://i2.y.qq.com/n3/other/pages/details/playlist.html?id=9792945579&hosteuin=';
+ const noRequest=async()=>{throw new Error('Full playlist links must not require a request');};
+ for(const input of [mobile,'分享歌单：'+mobile,'https://y.qq.com/n3/other/pages/details/playlist.html?hosteuin=&id=9792945579'])assert.equal(await qqPlaylistId(input,noRequest),9792945579);
+ assert.equal(await qqPlaylistId('https://c6.y.qq.com/base/fcgi-bin/u?x=1',async()=>({status:302,headers:new Headers({location:mobile})})),9792945579);
+ for(const input of [
+  'https://i2.y.qq.com/n3/other/pages/details/song.html?id=9792945579',
+  'https://i2.y.qq.com/n3/other/pages/details/playlist.html?id=0',
+  'https://i2.y.qq.com/n3/other/pages/details/playlist.html?id=bad',
+  'https://i2.y.qq.com/n3/other/pages/details/playlist.html',
+  'https://i2.y.qq.com.evil.example/n3/other/pages/details/playlist.html?id=9792945579',
+  'https://user@i2.y.qq.com/n3/other/pages/details/playlist.html?id=9792945579'
+ ])await assert.rejects(qqPlaylistId(input,noRequest));
+});
 test('QQ preset lifecycle keeps platform IDs independent and preserves pause',()=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'jukebox-qq-presets-'));
  try{
@@ -16,7 +30,7 @@ test('QQ preset lifecycle keeps platform IDs independent and preserves pause',()
  const fixture=id=>({id,name:'Fixture '+id,songs:[{songId:'song',platform:'qq'}]});qq.getPlaylist=async id=>fixture(id);qq.getChart=async()=>({...fixture(0),name:'QQ热歌榜'});netease.getPlaylistCached=async id=>fixture(id);
  config.adminKey='fixture';let calls=0;const router=require('./server/routes')({emit(){}},{isPlaying:()=>true,manualPaused:true},()=>calls++,{});
  const invoke=async(method,url,body={},query={})=>{const route=router.stack.find(l=>l.route&&l.route.path===url&&l.route.methods[method]).route;let output,status=200;const req={body,query,params:{playlistId:'123'},get:()=> 'fixture'};const res={status(n){status=n;return this},json(v){output=v;return this}};await route.stack.at(-1).handle(req,res);assert.equal(status,200);return output};
- await invoke('post','/admin/presets',{platform:'qq',playlistId:123});let presets=await invoke('get','/admin/presets');assert.equal(presets.presets.length,2);assert.equal(presets.presets[0].platform,'netease');
+ await invoke('post','/admin/presets',{platform:'qq',playlistId:'https://i2.y.qq.com/n3/other/pages/details/playlist.html?id=123&hosteuin='});let presets=await invoke('get','/admin/presets');assert.equal(presets.presets.length,2);assert.equal(presets.presets[0].platform,'netease');assert.equal(presets.presets[1].id,123);assert.equal(presets.presets[1].name,'Fixture 123');
  await invoke('post','/admin/playlist',{platform:'qq',playlistId:123});assert.equal(config.playlistId,123);assert.equal(config.qqPlaylistId,123);assert.equal(state.playSource,'qq-playlist');assert.equal(calls,0);
  await invoke('post','/admin/playlist',{platform:'qq',playlistId:0});assert.equal(config.qqPlaylistId,0);assert.equal(state.playlist.name,'QQ热歌榜');const persisted=require('./server/paths').configPath;delete require.cache[persisted];assert.equal(require(persisted).qqPlaylistId,0);assert.equal(require(persisted).adminKey,"preserved-fixture");
  assert.equal(fs.readFileSync(persisted,'utf8').split('module.exports.qqPlaylistId').length-1,1);

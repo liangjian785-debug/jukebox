@@ -28,11 +28,15 @@ module.exports = { playlistId };
 async function qqPlaylistId(input, request = fetch) {
   const text = String(input || '').trim();
   if (validId(text)) return validId(text);
-  const match = text.match(/https?:\/\/(?:y\.qq\.com|c6\.y\.qq\.com)\/[^\s<>]+/i);
+  const match = text.match(/https?:\/\/(?:y\.qq\.com|i2\.y\.qq\.com|c6\.y\.qq\.com)\/[^\s<>]+/i);
   if (!match) throw new Error('请输入 QQ 音乐歌单链接或有效歌单 ID');
   let url = new URL(match[0]);
   for (let redirects = 0; redirects < 4; redirects++) {
-    if (!['y.qq.com', 'c6.y.qq.com'].includes(url.hostname) || !['http:', 'https:'].includes(url.protocol) || url.username || url.password) break;
+    if (!['y.qq.com', 'i2.y.qq.com', 'c6.y.qq.com'].includes(url.hostname) || !['http:', 'https:'].includes(url.protocol) || url.username || url.password) break;
+    if (['y.qq.com', 'i2.y.qq.com'].includes(url.hostname) && url.pathname === '/n3/other/pages/details/playlist.html') {
+      const id = validId(url.searchParams.get('id'));
+      if (id) return id;
+    }
     const pathId = url.pathname.match(/^\/n\/(?:ryqq|ryqq_v2)\/playlist\/(\d+)\/?$/);
     if (url.hostname === 'y.qq.com' && pathId && validId(pathId[1])) return validId(pathId[1]);
     if (url.hostname === 'y.qq.com' && /(?:taoge|playsquare)/.test(url.pathname)) {
